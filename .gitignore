@@ -4,3 +4,6 @@ dist
 .idea
 *.tsbuildinfo
 output
+POC
+agents
+.env

@@ -1,3 +1,5 @@
+@import 'tailwindcss';
+
 :root {
   color-scheme: light;
   font-family: 'Segoe UI', 'Segoe UI Variable', Tahoma, Geneva, Verdana, sans-serif;
@@ -28,6 +30,235 @@ main {
 
 .app-content {
   padding: 28px;
+}
+
+.login-page {
+  min-height: 100vh;
+  display: grid;
+  place-items: stretch;
+  padding: 0;
+  background: #2f3136;
+}
+
+.login-shell {
+  width: 100%;
+  min-height: 100vh;
+  background: #d9d9d9;
+  border: 1px solid #1f8df6;
+  border-radius: 0;
+  overflow: hidden;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+}
+
+.login-left-panel {
+  background: #0088cb;
+  color: #ffffff;
+  padding: 30px 34px 34px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+.login-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.login-brand-logo {
+  width: 110px;
+  height: auto;
+  flex-shrink: 0;
+}
+
+.login-brand-text {
+  margin: 0;
+  max-width: 190px;
+  font-size: 20px;
+  line-height: 1.08;
+  font-weight: 700;
+}
+
+.login-quote {
+  margin: 0;
+  max-width: 350px;
+}
+
+.login-quote p {
+  margin: 0;
+  font-size: 18px;
+  line-height: 1.4;
+  letter-spacing: 0;
+}
+
+.login-quote footer {
+  margin-top: 8px;
+  font-size: 14px;
+  line-height: 1.2;
+}
+
+.login-right-panel {
+  display: grid;
+  place-items: center;
+  padding: 24px;
+}
+
+.login-form-container {
+  width: min(100%, 420px);
+}
+
+.login-form-container h1 {
+  margin: 0;
+  text-align: center;
+  font-size: 32px;
+  line-height: 1.2;
+  font-weight: 700;
+  color: #171717;
+}
+
+.login-form-container p {
+  margin: 8px 0 22px;
+  text-align: center;
+  font-size: 13px;
+  line-height: 1.35;
+  color: #7f7f7f;
+}
+
+.login-submit-button {
+  width: 100%;
+  height: 36px;
+  border-radius: 7px;
+  font-size: 13px;
+  font-weight: 400;
+  background: #0088cb;
+  color: #ffffff;
+}
+
+.login-submit-button:hover:not(:disabled) {
+  background: #0079b4;
+}
+
+.login-error-message {
+  margin: 10px 0 0;
+  text-align: center;
+  color: #b91c1c;
+  font-size: 13px;
+}
+
+@media (max-width: 1200px) {
+  .login-brand-logo {
+    width: 88px;
+  }
+
+  .login-brand-text {
+    font-size: 17px;
+    max-width: 150px;
+  }
+
+  .login-quote {
+    max-width: 320px;
+  }
+
+  .login-quote p {
+    font-size: 16px;
+  }
+
+  .login-quote footer {
+    font-size: 13px;
+  }
+
+  .login-form-container {
+    width: min(100%, 400px);
+  }
+
+  .login-form-container h1 {
+    font-size: 30px;
+  }
+
+  .login-form-container p {
+    font-size: 13px;
+  }
+
+  .login-submit-button {
+    height: 36px;
+    font-size: 13px;
+  }
+}
+
+@media (max-width: 1000px) {
+  .login-left-panel {
+    padding: 24px;
+  }
+
+  .login-form-container {
+    width: min(100%, 360px);
+  }
+
+  .login-form-container h1 {
+    font-size: 28px;
+  }
+
+  .login-form-container p {
+    font-size: 13px;
+  }
+
+  .login-submit-button {
+    height: 36px;
+    font-size: 13px;
+  }
+
+  .login-brand-text {
+    font-size: 16px;
+    max-width: 130px;
+  }
+
+  .login-brand-logo {
+    width: 72px;
+  }
+
+  .login-quote p {
+    font-size: 16px;
+  }
+
+  .login-quote footer {
+    font-size: 16px;
+  }
+}
+
+@media (max-width: 900px) {
+  .login-shell {
+    grid-template-columns: 1fr;
+  }
+
+  .login-left-panel {
+    min-height: 240px;
+  }
+
+  .login-quote p {
+    font-size: 18px;
+  }
+
+  .login-quote footer {
+    font-size: 14px;
+  }
+
+  .login-form-container {
+    max-width: 420px;
+  }
+
+  .login-form-container h1 {
+    font-size: 32px;
+  }
+
+  .login-form-container p {
+    font-size: 16px;
+  }
+
+  .login-submit-button {
+    font-size: 16px;
+    height: 44px;
+  }
 }
 
 .dashboard-card {

@@ -1,8 +1,10 @@
 import { app, BrowserWindow } from 'electron';
 import path from 'node:path';
 import { initializeDatabase } from './database/database';
+import { registerAuthIpc } from './ipc/authIpc';
 import { registerInstallerIpc } from './ipc/installerIpc';
 import { createRuntimeConfigService } from './services/configService';
+import { loadDotEnvFromProjectRoot } from './services/envService';
 import { createInternalHttpServer } from './server/httpServer';
 
 const isDev = !app.isPackaged;
@@ -34,9 +36,12 @@ async function createMainWindow(): Promise<void> {
 }
 
 async function bootstrap(): Promise<void> {
+  loadDotEnvFromProjectRoot();
+
   const appDatabase = await initializeDatabase(app.getPath('userData'));
   const configService = createRuntimeConfigService(appDatabase.connection);
   registerInstallerIpc(configService);
+  registerAuthIpc(() => mainWindow);
   const config = await configService.loadRuntimeConfig();
   const httpServer = createInternalHttpServer(config.apiPort);
 
