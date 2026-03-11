@@ -1,6 +1,7 @@
 import { app, BrowserWindow } from 'electron';
 import path from 'node:path';
-import { loadRuntimeConfig } from './services/configService';
+import { initializeDatabase } from './database/database';
+import { createRuntimeConfigService } from './services/configService';
 import { createInternalHttpServer } from './server/httpServer';
 
 const isDev = !app.isPackaged;
@@ -32,7 +33,9 @@ async function createMainWindow(): Promise<void> {
 }
 
 async function bootstrap(): Promise<void> {
-  const config = loadRuntimeConfig();
+  const appDatabase = await initializeDatabase(app.getPath('userData'));
+  const configService = createRuntimeConfigService(appDatabase.connection);
+  const config = await configService.loadRuntimeConfig();
   const httpServer = createInternalHttpServer(config.apiPort);
 
   await httpServer.start();
@@ -40,11 +43,15 @@ async function bootstrap(): Promise<void> {
 
   app.on('before-quit', () => {
     void httpServer.stop();
+    void appDatabase.close();
   });
 }
 
 app.whenReady().then(() => {
-  void bootstrap();
+  void bootstrap().catch((error: unknown) => {
+    console.error('Application bootstrap failed', error);
+    app.quit();
+  });
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
