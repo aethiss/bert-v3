@@ -1,5 +1,19 @@
-import { contextBridge } from 'electron';
+import { contextBridge, ipcRenderer } from 'electron';
+import type { AppMode } from '../shared/types/appMode';
+import type { InstallerModeState } from '../shared/types/ipc/installer';
+import type { BertAppApi } from '../shared/types/preload';
 
-contextBridge.exposeInMainWorld('bertApp', {
+const bertAppApi: BertAppApi = {
   version: '0.1.0'
-});
+  ,
+  installer: {
+    getModeState() {
+      return ipcRenderer.invoke('installer:getModeState') as Promise<InstallerModeState>;
+    },
+    setMode(mode: AppMode) {
+      return ipcRenderer.invoke('installer:setMode', mode) as Promise<InstallerModeState>;
+    }
+  }
+};
+
+contextBridge.exposeInMainWorld('bertApp', bertAppApi);

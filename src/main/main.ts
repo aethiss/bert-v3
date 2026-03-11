@@ -1,6 +1,7 @@
 import { app, BrowserWindow } from 'electron';
 import path from 'node:path';
 import { initializeDatabase } from './database/database';
+import { registerInstallerIpc } from './ipc/installerIpc';
 import { createRuntimeConfigService } from './services/configService';
 import { createInternalHttpServer } from './server/httpServer';
 
@@ -35,6 +36,7 @@ async function createMainWindow(): Promise<void> {
 async function bootstrap(): Promise<void> {
   const appDatabase = await initializeDatabase(app.getPath('userData'));
   const configService = createRuntimeConfigService(appDatabase.connection);
+  registerInstallerIpc(configService);
   const config = await configService.loadRuntimeConfig();
   const httpServer = createInternalHttpServer(config.apiPort);
 

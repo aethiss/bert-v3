@@ -7,3 +7,5 @@
 - [x] Config TypeScript separata (`main`, `preload`, `renderer`) con `typecheck` dedicato.
 - [x] Setup Node 24 (`.nvmrc` + `engines` in `package.json`).
 - [x] Configurazione SQLite locale con inizializzazione DB persistente e tabella `config`.
+- [x] Finestra installer Windows-like per selezione modalità `SERVER/CLIENT` al primo avvio, persistita su SQLite e non modificabile dopo il salvataggio.
+- [x] Miglioramenti DX: alias import non relativi (`@renderer`, `@shared`) e setup `ESLint` + `Prettier`.

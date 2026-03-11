@@ -7,12 +7,14 @@
     "types": ["vite/client"],
     "moduleResolution": "Bundler",
     "noEmit": true,
-    "baseUrl": "src/renderer",
+    "baseUrl": ".",
     "paths": {
-      "@ui/*": ["ui/*"],
-      "@hooks/*": ["hooks/*"],
-      "@services/*": ["services/*"],
-      "@types/*": ["types/*"]
+      "@renderer/*": ["src/renderer/*"],
+      "@shared/*": ["src/shared/*"],
+      "@ui/*": ["src/renderer/ui/*"],
+      "@hooks/*": ["src/renderer/hooks/*"],
+      "@services/*": ["src/renderer/services/*"],
+      "@types/*": ["src/renderer/types/*"]
     }
   },
   "include": ["src/renderer/**/*.ts", "src/renderer/**/*.tsx", "src/shared/types/**/*.ts"]
