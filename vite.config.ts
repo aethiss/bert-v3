@@ -6,6 +6,8 @@ export default defineConfig({
   plugins: [react()],
   resolve: {
     alias: {
+      '@renderer': path.resolve(__dirname, 'src/renderer'),
+      '@shared': path.resolve(__dirname, 'src/shared'),
       '@ui': path.resolve(__dirname, 'src/renderer/ui'),
       '@hooks': path.resolve(__dirname, 'src/renderer/hooks'),
       '@services': path.resolve(__dirname, 'src/renderer/services'),
