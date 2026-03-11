@@ -1,0 +1,11 @@
+# Stack
+- Electron for desktop application (app should be cross-platform and work on Windows, macOS)
+- Vite for build tool
+- React for UI
+- TypeScript for type safety
+- SQLite for local data storage
+- RESTful APIs for client-server communication (Node HTTP server integrated in the application TODO: consider using Express or Restify for easier API management)
+- Git for version control and branching strategy
+- Shadcn for componente design https://ui.shadcn.com/docs
+- Tailwind CSS for styling (optional, but can speed up UI development and ensure a consistent design language)
+- Translation: is mandatory the application support english and arabic languages, and be able to switch between them easily. We can use a library like i18next for managing translations and language switching in the application. (remember arabic should be right-to-left, so we need to ensure our UI supports RTL layouts when arabic is selected)

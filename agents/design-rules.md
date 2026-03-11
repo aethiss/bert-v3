@@ -1,0 +1,9 @@
+# figma
+ We have a url link to the figma design: https://www.figma.com/design/Gy4khB4kuqTwbXe06TdePp/BeRT2?node-id=18-1795&t=8p7LEHwQGgbp49do-0
+ This design includes Server and Client interfaces, with a focus on the login page and the main dashboard. The design is clean and modern, with a clear emphasis on usability and accessibility. The color scheme is neutral, with a mix of light and dark tones, which should work well for both English and Arabic languages. The layout is responsive, ensuring that the application will look good on different screen sizes and orientations. Overall, the design provides a solid foundation for building a user-friendly and visually appealing application.
+ 
+Logos and other icons will be provided during the development process, and we will ensure that they are integrated seamlessly into the application, maintaining a consistent visual identity throughout. The design also includes specific components and UI elements that we will implement according to the provided specifications, ensuring that the final product closely matches the original design vision.
+
+# Shadcn
+We like to use Shadcn for our component design, as it provides a comprehensive set of pre-designed components that can be easily customized to fit our application's needs. Shadcn's components are built with accessibility in mind, ensuring that our application will be usable by a wide range of users, including those with disabilities. Additionally, Shadcn's design system allows for a consistent look and feel across the entire application, which is crucial for creating a cohesive user experience. By leveraging Shadcn's components, we can speed up our development process while still maintaining a high level of quality and design consistency throughout the application.
+url online for documentation: https://ui.shadcn.com/docs
