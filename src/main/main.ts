@@ -1,0 +1,68 @@
+import { app, BrowserWindow } from 'electron';
+import path from 'node:path';
+import { loadRuntimeConfig } from './services/configService';
+import { createInternalHttpServer } from './server/httpServer';
+
+const isDev = !app.isPackaged;
+let mainWindow: BrowserWindow | null = null;
+
+async function createMainWindow(): Promise<void> {
+  const window = new BrowserWindow({
+    width: 1280,
+    height: 800,
+    minWidth: 960,
+    minHeight: 600,
+    show: false,
+    webPreferences: {
+      preload: path.join(__dirname, '../preload/index.js'),
+      contextIsolation: true,
+      nodeIntegration: false
+    }
+  });
+
+  window.once('ready-to-show', () => window.show());
+
+  if (isDev && process.env.VITE_DEV_SERVER_URL) {
+    await window.loadURL(process.env.VITE_DEV_SERVER_URL);
+  } else {
+    await window.loadFile(path.join(__dirname, '../renderer/index.html'));
+  }
+
+  mainWindow = window;
+}
+
+async function bootstrap(): Promise<void> {
+  const config = loadRuntimeConfig();
+  const httpServer = createInternalHttpServer(config.apiPort);
+
+  await httpServer.start();
+  await createMainWindow();
+
+  app.on('before-quit', () => {
+    void httpServer.stop();
+  });
+}
+
+app.whenReady().then(() => {
+  void bootstrap();
+
+  app.on('activate', () => {
+    if (BrowserWindow.getAllWindows().length === 0) {
+      void createMainWindow();
+    }
+  });
+});
+
+app.on('window-all-closed', () => {
+  if (process.platform !== 'darwin') {
+    app.quit();
+  }
+});
+
+app.on('browser-window-created', (_, window) => {
+  window.on('closed', () => {
+    if (window === mainWindow) {
+      mainWindow = null;
+    }
+  });
+});
