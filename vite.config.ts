@@ -8,6 +8,7 @@ export default defineConfig({
   envPrefix: ['VITE_', 'RENDERER_VITE_'],
   resolve: {
     alias: {
+      '@': path.resolve(__dirname, 'src'),
       '@renderer': path.resolve(__dirname, 'src/renderer'),
       '@shared': path.resolve(__dirname, 'src/shared'),
       '@ui': path.resolve(__dirname, 'src/renderer/ui'),

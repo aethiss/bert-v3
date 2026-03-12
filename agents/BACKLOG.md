@@ -24,3 +24,6 @@
 - [x] Refactor schema per storico completo per ciclo: `families` con PK composta (`hh_id`, `cycle_code`) e FK composta da `members`, con migrazione compatibile per database esistenti.
 - [x] Overview collegata ai dati reali sincronizzati: bottone `Synchronize` attivo in pagina, cards alimentate da summary locale e lock delle altre sezioni finché i dati non sono disponibili.
 - [x] Miglioramenti responsive/design sezione server (nav + overview) con allineamento progressivo agli export Figma, riduzione tipografie fuori dalla navigazione e gestione robusta overflow testi lunghi.
+- [x] Ricerca offline in sezione Distribution da database locale: query per `FamilyUniqueCode` e `documentNumber`, selezione membro `Principle` (fallback primo record), rendering tabella risultati conforme al design `content.png`.
+- [x] Miglioramenti UX Distribution: input numerico-only, utilizzo componente `src/components/ui/input.tsx` (shadcn), fix layout tabella a larghezza piena e action `Distribute` visual-only.
+- [x] Copertura test per logica offline distribution: unit test su selezione `Principle` e integration test SQLite su ricerca per `FamilyUniqueCode`/`documentNumber`.

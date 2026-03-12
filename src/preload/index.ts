@@ -40,6 +40,9 @@ const bertAppApi: BertAppApi = {
     sync(params) {
       return ipcRenderer.invoke('eligibleData:sync', params);
     },
+    searchDistributionMember(query: string) {
+      return ipcRenderer.invoke('eligibleData:searchDistributionMember', query);
+    },
     hasData() {
       return ipcRenderer.invoke('eligibleData:hasData');
     },

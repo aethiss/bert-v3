@@ -3,7 +3,10 @@ import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
-const { buildOverviewSummaryFromPayload } = require('../../dist/main/services/eligibleDataService.js');
+const {
+  buildOverviewSummaryFromPayload,
+  pickPreferredDistributionMember
+} = require('../../dist/main/services/eligibleDataService.js');
 
 test('buildOverviewSummaryFromPayload maps top-level totals and first two cycles', () => {
   const payload = {
@@ -65,4 +68,22 @@ test('buildOverviewSummaryFromPayload maps top-level totals and first two cycles
   assert.equal(summary.cycles.length, 2);
   assert.equal(summary.cycles[0].cycleCode, 101);
   assert.equal(summary.cycles[1].cycleCode, 102);
+});
+
+test('pickPreferredDistributionMember selects Principle role and falls back to first', () => {
+  const withPrinciple = [
+    { id: 11, role: 'Member', documentNumber: 'A', familyUniqueCode: 1, cycleCode: 10 },
+    { id: 12, role: 'Principle', documentNumber: 'B', familyUniqueCode: 1, cycleCode: 10 }
+  ];
+
+  const preferred = pickPreferredDistributionMember(withPrinciple);
+  assert.equal(preferred.id, 12);
+
+  const withoutPrinciple = [
+    { id: 21, role: 'Caregiver', documentNumber: 'X', familyUniqueCode: 2, cycleCode: 10 },
+    { id: 22, role: 'Member', documentNumber: 'Y', familyUniqueCode: 2, cycleCode: 10 }
+  ];
+
+  const fallback = pickPreferredDistributionMember(withoutPrinciple);
+  assert.equal(fallback.id, 21);
 });

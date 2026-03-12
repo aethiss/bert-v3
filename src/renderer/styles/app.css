@@ -593,9 +593,29 @@ main {
 }
 
 .distribution-action-cell {
+  display: table-cell;
+}
+
+.distribution-action-content {
   display: inline-flex;
   align-items: center;
   gap: 8px;
+}
+
+.distribution-action-btn {
+  border: none;
+  background: transparent;
+  color: #111827;
+  font-size: 13px;
+  font-weight: 500;
+  padding: 0;
+  cursor: default;
+}
+
+.distribution-empty {
+  margin: 14px 0 0;
+  font-size: 13px;
+  color: #6b7280;
 }
 
 .configuration-layout {

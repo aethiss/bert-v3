@@ -9,6 +9,7 @@
     "noEmit": true,
     "baseUrl": ".",
     "paths": {
+      "@/*": ["src/*"],
       "@renderer/*": ["src/renderer/*"],
       "@shared/*": ["src/shared/*"],
       "@ui/*": ["src/renderer/ui/*"],

@@ -7,6 +7,7 @@ const CHANNEL_HAS_ELIGIBLE_DATA = 'eligibleData:hasData';
 const CHANNEL_GET_OVERVIEW_SUMMARY = 'eligibleData:getOverviewSummary';
 const CHANNEL_CLEAR_ELIGIBLE_DATA = 'eligibleData:clear';
 const CHANNEL_SYNC_ELIGIBLE_DATA = 'eligibleData:sync';
+const CHANNEL_SEARCH_DISTRIBUTION_MEMBER = 'eligibleData:searchDistributionMember';
 
 function resolveEligibleMembersUrl(fdpCode: string): string {
   const apiBase = process.env.RENDERER_VITE_API_URL ?? process.env.VITE_API_URL;
@@ -32,6 +33,7 @@ export function registerEligibleDataIpc(eligibleDataService: EligibleDataService
   ipcMain.removeHandler(CHANNEL_GET_OVERVIEW_SUMMARY);
   ipcMain.removeHandler(CHANNEL_CLEAR_ELIGIBLE_DATA);
   ipcMain.removeHandler(CHANNEL_SYNC_ELIGIBLE_DATA);
+  ipcMain.removeHandler(CHANNEL_SEARCH_DISTRIBUTION_MEMBER);
 
   ipcMain.handle(CHANNEL_SAVE_ELIGIBLE_DATA, async (_event, payload: EligibleMembersApiResponse) => {
     return eligibleDataService.saveEligibleMembers(payload);
@@ -47,6 +49,10 @@ export function registerEligibleDataIpc(eligibleDataService: EligibleDataService
 
   ipcMain.handle(CHANNEL_CLEAR_ELIGIBLE_DATA, async () => {
     await eligibleDataService.clearEligibleData();
+  });
+
+  ipcMain.handle(CHANNEL_SEARCH_DISTRIBUTION_MEMBER, async (_event, query: string) => {
+    return eligibleDataService.searchDistributionMember(query);
   });
 
   ipcMain.handle(

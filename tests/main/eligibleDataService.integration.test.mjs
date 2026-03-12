@@ -98,3 +98,102 @@ test('eligibleDataService persists and returns overview summary', async () => {
     fs.rmSync(tempDir, { recursive: true, force: true });
   }
 });
+
+test('eligibleDataService searches member offline by family unique code and document number', async () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'bert-eligible-search-'));
+  const dbPath = path.join(tempDir, 'test.sqlite');
+
+  const db = await open({
+    filename: dbPath,
+    driver: sqlite3.Database
+  });
+
+  try {
+    await runMigrations(db);
+    const service = createEligibleDataService(db);
+
+    const payload = {
+      fdp_code: 'FDP-88',
+      fdp_name: 'Homs',
+      total_households: 1,
+      total_cycles: 1,
+      cycles: [
+        {
+          cycleId: 'cycle-10',
+          cycleCode: 1010,
+          startDate: '2026-05-01',
+          endDate: '2026-05-31',
+          cooperatingPartner: null,
+          fieldDistributionPoint: null,
+          assistancePackageName: 'SFA',
+          cycleName: 'SFA - May',
+          cycleNote: null,
+          household_count: 1,
+          households: [
+            {
+              hhId: 'HH-10',
+              cycleCode: 1010,
+              assignedStatus: 'assigned',
+              householdSize: '3',
+              quantity: '2',
+              assistancePackageName: 'SFA',
+              cooperatingPartner: null,
+              fdp_id: 'fdp-id',
+              fdp_name: 'FDP-H',
+              Number_of_Children_between_6_and_23_Months: 0,
+              FamilyUniqueCode: 556677,
+              address: null,
+              status: 'ACTIVE',
+              eligible: true,
+              members: [
+                {
+                  id: 10,
+                  family: 556677,
+                  role: 'Member',
+                  firstName: 'A',
+                  lastName: 'B',
+                  fatherName: null,
+                  motherName: null,
+                  motherLastName: null,
+                  cityOfBirth: null,
+                  dateOfBirth: null,
+                  documentNumber: 'DOC-10',
+                  cycleCode: 1010,
+                  status: 'eligible'
+                },
+                {
+                  id: 11,
+                  family: 556677,
+                  role: 'Principle',
+                  firstName: 'C',
+                  lastName: 'D',
+                  fatherName: null,
+                  motherName: null,
+                  motherLastName: null,
+                  cityOfBirth: null,
+                  dateOfBirth: null,
+                  documentNumber: 'DOC-11',
+                  cycleCode: 1010,
+                  status: 'eligible'
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    };
+
+    await service.saveEligibleMembers(payload);
+
+    const byFamily = await service.searchDistributionMember('556677');
+    assert.equal(byFamily.match, 'familyUniqueCode');
+    assert.equal(byFamily.member.id, 11);
+
+    const byDocument = await service.searchDistributionMember('DOC-10');
+    assert.equal(byDocument.match, 'documentNumber');
+    assert.equal(byDocument.member.id, 10);
+  } finally {
+    await db.close();
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+});

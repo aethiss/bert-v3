@@ -72,3 +72,17 @@ export interface EligibleOverviewSummary {
   totalMembers: number;
   cycles: EligibleCycleSummary[];
 }
+
+export type DistributionSearchMatch = 'familyUniqueCode' | 'documentNumber';
+
+export interface DistributionSearchMember {
+  id: number;
+  role: string | null;
+  documentNumber: string | null;
+  familyUniqueCode: number;
+}
+
+export interface DistributionSearchResult {
+  match: DistributionSearchMatch;
+  member: DistributionSearchMember;
+}

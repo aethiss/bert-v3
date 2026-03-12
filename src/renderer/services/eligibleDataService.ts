@@ -1,4 +1,8 @@
-import type { EligibleMembersApiResponse, EligibleOverviewSummary } from '@shared/types/eligible';
+import type {
+  DistributionSearchResult,
+  EligibleMembersApiResponse,
+  EligibleOverviewSummary
+} from '@shared/types/eligible';
 
 export async function saveEligibleData(
   payload: EligibleMembersApiResponse
@@ -11,6 +15,12 @@ export async function syncEligibleData(params: {
   jwt: string;
 }): Promise<EligibleOverviewSummary> {
   return window.bertApp.eligibleData.sync(params);
+}
+
+export async function searchDistributionMember(
+  query: string
+): Promise<DistributionSearchResult | null> {
+  return window.bertApp.eligibleData.searchDistributionMember(query);
 }
 
 export async function hasEligibleData(): Promise<boolean> {

@@ -1,5 +1,7 @@
 import type { Database } from 'sqlite';
 import type {
+  DistributionSearchMember,
+  DistributionSearchResult,
   EligibleCycleSummary,
   EligibleMembersApiResponse,
   EligibleOverviewSummary
@@ -49,9 +51,29 @@ export function buildOverviewSummaryFromPayload(
 
 export interface EligibleDataService {
   saveEligibleMembers(payload: EligibleMembersApiResponse): Promise<EligibleOverviewSummary>;
+  searchDistributionMember(query: string): Promise<DistributionSearchResult | null>;
   hasEligibleData(): Promise<boolean>;
   getOverviewSummary(): Promise<EligibleOverviewSummary>;
   clearEligibleData(): Promise<void>;
+}
+
+interface DistributionMemberRow extends DistributionSearchMember {
+  cycleCode: number;
+}
+
+export function isPrincipleRole(role: string | null): boolean {
+  const normalized = (role ?? '').trim().toLowerCase();
+  return normalized === 'principle' || normalized === 'principal';
+}
+
+export function pickPreferredDistributionMember(
+  rows: DistributionMemberRow[]
+): DistributionMemberRow | null {
+  if (rows.length === 0) {
+    return null;
+  }
+
+  return rows.find((row) => isPrincipleRole(row.role)) ?? rows[0];
 }
 
 export function createEligibleDataService(db: Database): EligibleDataService {
@@ -255,6 +277,93 @@ export function createEligibleDataService(db: Database): EligibleDataService {
     return asNumber(row?.count) > 0;
   }
 
+  async function searchDistributionMember(query: string): Promise<DistributionSearchResult | null> {
+    const normalizedQuery = query.trim();
+    if (!normalizedQuery) {
+      return null;
+    }
+
+    const isNumericFamilyCode = /^\d+$/.test(normalizedQuery);
+
+    if (isNumericFamilyCode) {
+      const familyUniqueCode = Number(normalizedQuery);
+      if (Number.isSafeInteger(familyUniqueCode)) {
+        const familyRows = await db.all<DistributionMemberRow[]>(
+          `
+          SELECT
+            m.member_id as id,
+            m.role as role,
+            m.document_number as documentNumber,
+            f.family_unique_code as familyUniqueCode,
+            m.cycle_code as cycleCode
+          FROM members m
+          INNER JOIN families f
+            ON f.hh_id = m.family_hh_id
+            AND f.cycle_code = m.cycle_code
+          WHERE f.family_unique_code = ?
+            AND m.cycle_code = (
+              SELECT MAX(m2.cycle_code)
+              FROM members m2
+              INNER JOIN families f2
+                ON f2.hh_id = m2.family_hh_id
+                AND f2.cycle_code = m2.cycle_code
+              WHERE f2.family_unique_code = ?
+            )
+          ORDER BY m.member_id ASC
+          `,
+          familyUniqueCode,
+          familyUniqueCode
+        );
+
+        const preferredFamilyMember = pickPreferredDistributionMember(familyRows ?? []);
+        if (preferredFamilyMember) {
+          return {
+            match: 'familyUniqueCode',
+            member: {
+              id: preferredFamilyMember.id,
+              role: preferredFamilyMember.role,
+              documentNumber: preferredFamilyMember.documentNumber,
+              familyUniqueCode: preferredFamilyMember.familyUniqueCode
+            }
+          };
+        }
+      }
+    }
+
+    const memberByDocument = await db.get<DistributionMemberRow>(
+      `
+      SELECT
+        m.member_id as id,
+        m.role as role,
+        m.document_number as documentNumber,
+        f.family_unique_code as familyUniqueCode,
+        m.cycle_code as cycleCode
+      FROM members m
+      INNER JOIN families f
+        ON f.hh_id = m.family_hh_id
+        AND f.cycle_code = m.cycle_code
+      WHERE LOWER(TRIM(m.document_number)) = LOWER(TRIM(?))
+      ORDER BY m.cycle_code DESC, m.member_id ASC
+      LIMIT 1
+      `,
+      normalizedQuery
+    );
+
+    if (!memberByDocument) {
+      return null;
+    }
+
+    return {
+      match: 'documentNumber',
+      member: {
+        id: memberByDocument.id,
+        role: memberByDocument.role,
+        documentNumber: memberByDocument.documentNumber,
+        familyUniqueCode: memberByDocument.familyUniqueCode
+      }
+    };
+  }
+
   async function getOverviewSummary(): Promise<EligibleOverviewSummary> {
     const meta = await db.get<{
       fdpCode: string | null;
@@ -304,6 +413,7 @@ export function createEligibleDataService(db: Database): EligibleDataService {
 
   return {
     saveEligibleMembers,
+    searchDistributionMember,
     hasEligibleData,
     getOverviewSummary,
     clearEligibleData

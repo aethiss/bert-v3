@@ -1,5 +1,9 @@
 import type { AppMode } from './appMode';
-import type { EligibleMembersApiResponse, EligibleOverviewSummary } from './eligible';
+import type {
+  DistributionSearchResult,
+  EligibleMembersApiResponse,
+  EligibleOverviewSummary
+} from './eligible';
 import type { CiamLoginResult, ExchangeCodeResult } from './ipc/auth';
 import type { InstallerModeState } from './ipc/installer';
 import type { PersistedUserProfile, UserInfoApiModel } from './user';
@@ -21,6 +25,7 @@ export interface BertAppApi {
   eligibleData: {
     save(payload: EligibleMembersApiResponse): Promise<EligibleOverviewSummary>;
     sync(params: { fdpCode: string; jwt: string }): Promise<EligibleOverviewSummary>;
+    searchDistributionMember(query: string): Promise<DistributionSearchResult | null>;
     hasData(): Promise<boolean>;
     getOverviewSummary(): Promise<EligibleOverviewSummary>;
     clear(): Promise<void>;
