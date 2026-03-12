@@ -6,6 +6,8 @@ interface OverviewProps {
   hasEligibleData: boolean;
   overviewSummary: EligibleOverviewSummary;
   isSynchronizing: boolean;
+  isSynchronizeDisabled: boolean;
+  isOnline: boolean;
   onSynchronize: () => void;
 }
 
@@ -28,6 +30,8 @@ export function Overview({
   hasEligibleData,
   overviewSummary,
   isSynchronizing,
+  isSynchronizeDisabled,
+  isOnline,
   onSynchronize
 }: OverviewProps) {
   const cycles = overviewSummary.cycles;
@@ -40,8 +44,22 @@ export function Overview({
     <section className="server-content-block">
       <h1 className="server-page-title">Overview</h1>
       <div className="server-row-headline">
-        <p>Synchronize data to start using the Application</p>
-        <Button className="server-btn" onClick={onSynchronize} disabled={isSynchronizing}>
+        <p>
+          Synchronize data to start using the Application
+          <span className="overview-sync-meta">
+            Last sync:{' '}
+            {overviewSummary.lastSynchronizedAt
+              ? formatDate(overviewSummary.lastSynchronizedAt)
+              : 'Never'}
+            {' • '}
+            {isOnline ? 'Online' : 'Offline'}
+          </span>
+        </p>
+        <Button
+          className="server-btn"
+          onClick={onSynchronize}
+          disabled={isSynchronizing || isSynchronizeDisabled}
+        >
           {isSynchronizing ? 'Synchronizing...' : 'Synchronize'}
         </Button>
       </div>

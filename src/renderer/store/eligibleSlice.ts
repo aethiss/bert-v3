@@ -12,6 +12,8 @@ const emptySummary: EligibleOverviewSummary = {
   totalCycles: 0,
   totalHouseholds: 0,
   totalMembers: 0,
+  pendingDistributionCount: 0,
+  lastSynchronizedAt: null,
   cycles: []
 };
 

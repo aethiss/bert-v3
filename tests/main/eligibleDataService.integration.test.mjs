@@ -192,6 +192,43 @@ test('eligibleDataService searches member offline by family unique code and docu
     const byDocument = await service.searchDistributionMember('DOC-10');
     assert.equal(byDocument.match, 'documentNumber');
     assert.equal(byDocument.member.id, 10);
+
+    const detail = await service.getDistributionDetail({
+      memberId: byFamily.member.id,
+      cycleCode: byFamily.member.cycleCode,
+      familyHhId: byFamily.member.familyHhId
+    });
+    assert.equal(detail.household.familyUniqueCode, 556677);
+    assert.equal(Array.isArray(detail.activeCycles), true);
+    assert.equal(detail.activeCycles.length, 1);
+
+    const saveResult = await service.saveDistributionEvent({
+      familyUniqueCode: 556677,
+      memberId: byFamily.member.id,
+      cycleCode: byFamily.member.cycleCode,
+      mainOperator: 595,
+      mainOperatorFDP: '2547002158',
+      subOperator: null,
+      appSignature: '1234567890',
+      notes: 'Test note'
+    });
+    assert.equal(typeof saveResult.id, 'number');
+    assert.equal(saveResult.id > 0, true);
+
+    await assert.rejects(
+      () =>
+        service.saveDistributionEvent({
+          familyUniqueCode: 556677,
+          memberId: byDocument.member.id,
+          cycleCode: byFamily.member.cycleCode,
+          mainOperator: 595,
+          mainOperatorFDP: '2547002158',
+          subOperator: null,
+          appSignature: '1234567890',
+          notes: 'Duplicate attempt'
+        }),
+      /Duplicate distribution blocked/i
+    );
   } finally {
     await db.close();
     fs.rmSync(tempDir, { recursive: true, force: true });

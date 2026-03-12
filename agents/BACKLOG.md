@@ -27,3 +27,8 @@
 - [x] Ricerca offline in sezione Distribution da database locale: query per `FamilyUniqueCode` e `documentNumber`, selezione membro `Principle` (fallback primo record), rendering tabella risultati conforme al design `content.png`.
 - [x] Miglioramenti UX Distribution: input numerico-only, utilizzo componente `src/components/ui/input.tsx` (shadcn), fix layout tabella a larghezza piena e action `Distribute` visual-only.
 - [x] Copertura test per logica offline distribution: unit test su selezione `Principle` e integration test SQLite su ricerca per `FamilyUniqueCode`/`documentNumber`.
+- [x] Flusso `Distribute` completo offline: dettaglio household/cicli/membri, conferma con modal di verifica (`FamilyUniqueCode` o `Document ID`) e salvataggio locale evento su `distribution_queue`.
+- [x] Estensione payload distribuzione locale secondo contratto backend: `familyUniqueCode`, `memberId`, `cycleCode`, `mainOperator`, `mainOperatorFDP`, `subOperator`, `appSignature`, `notes`.
+- [x] Overview/navigation arricchite con stato sync locale: `Last sync` visibile, badge conteggio distribuzioni pending su voce menu `Data`, refresh summary on `distribution-queue-updated`.
+- [x] Regole operative sincronizzazione: bottone `Synchronize` disabilitato quando utente offline o quando esistono distribuzioni locali pending.
+- [x] Vincolo anti-doppia distribuzione per famiglia/ciclo: blocco salvataggio su combinazione `family_unique_code + cycle_code` con messaggio evidente in UI e copertura integration test dedicata.

@@ -11,21 +11,23 @@ export function createUserService(db: Database): UserService {
   return {
     async getUserProfile() {
       const record = await db.get<PersistedUserProfile>(
-        'SELECT email, fdp, field_office as fieldOffice FROM "user" WHERE id = 1'
+        'SELECT user_id as id, email, fdp, field_office as fieldOffice FROM "user" WHERE id = 1'
       );
       return record ?? null;
     },
     async saveUserProfile(profile) {
       await db.run(
         `
-        INSERT INTO "user" (id, email, fdp, field_office)
-        VALUES (1, ?, ?, ?)
+        INSERT INTO "user" (id, user_id, email, fdp, field_office)
+        VALUES (1, ?, ?, ?, ?)
         ON CONFLICT(id) DO UPDATE SET
+          user_id = excluded.user_id,
           email = excluded.email,
           fdp = excluded.fdp,
           field_office = excluded.field_office,
           updated_at = CURRENT_TIMESTAMP
         `,
+        profile.id,
         profile.email,
         profile.fdp,
         profile.fieldOffice

@@ -105,6 +105,17 @@ export function App() {
   }, []);
 
   useEffect(() => {
+    const onDistributionQueueUpdated = () => {
+      void refreshEligibleSummary();
+    };
+
+    window.addEventListener('distribution-queue-updated', onDistributionQueueUpdated);
+    return () => {
+      window.removeEventListener('distribution-queue-updated', onDistributionQueueUpdated);
+    };
+  }, [refreshEligibleSummary]);
+
+  useEffect(() => {
     const onHashChange = () => {
       setRoute(parseAppHash(window.location.hash));
     };
@@ -246,6 +257,7 @@ export function App() {
         hasEligibleData={hasEligibleData}
         overviewSummary={eligibleOverviewSummary}
         isSynchronizing={isSynchronizing}
+        isSynchronizeDisabled={!isOnline || eligibleOverviewSummary.pendingDistributionCount > 0}
         onSynchronize={() => {
           void (async () => {
             try {
@@ -257,6 +269,7 @@ export function App() {
             }
           })();
         }}
+        pendingDistributionCount={eligibleOverviewSummary.pendingDistributionCount}
         userEmail={currentUser?.email ?? ''}
         isOnline={isOnline}
         authActionLabel={isOnline ? 'Logout' : 'Login'}

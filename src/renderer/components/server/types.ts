@@ -1,6 +1,6 @@
 export type ServerSection = 'overview' | 'distribution' | 'operations' | 'data' | 'configuration';
 
-export type DistributionMode = 'search' | 'result';
+export type DistributionMode = 'search' | 'result' | 'detail';
 
 export type ConfigurationTab = 'server' | 'printer' | 'log';
 

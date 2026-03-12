@@ -40,7 +40,8 @@ export function parseAppHash(hash: string): ParsedRoute {
       server: {
         ...DEFAULT_SERVER_ROUTE,
         section: 'distribution',
-        distributionMode: segments[2] === 'result' ? 'result' : 'search'
+        distributionMode:
+          segments[2] === 'detail' ? 'detail' : segments[2] === 'result' ? 'result' : 'search'
       }
     };
   }
@@ -89,9 +90,13 @@ export function toAppHash(route: ParsedRoute): string {
   }
 
   if (section === 'distribution') {
-    return distributionMode === 'result'
-      ? '#/server/distribution/result'
-      : '#/server/distribution/search';
+    if (distributionMode === 'detail') {
+      return '#/server/distribution/detail';
+    }
+    if (distributionMode === 'result') {
+      return '#/server/distribution/result';
+    }
+    return '#/server/distribution/search';
   }
 
   if (section === 'configuration') {

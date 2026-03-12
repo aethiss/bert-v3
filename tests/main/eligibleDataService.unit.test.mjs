@@ -72,16 +72,48 @@ test('buildOverviewSummaryFromPayload maps top-level totals and first two cycles
 
 test('pickPreferredDistributionMember selects Principle role and falls back to first', () => {
   const withPrinciple = [
-    { id: 11, role: 'Member', documentNumber: 'A', familyUniqueCode: 1, cycleCode: 10 },
-    { id: 12, role: 'Principle', documentNumber: 'B', familyUniqueCode: 1, cycleCode: 10 }
+    {
+      id: 11,
+      role: 'Member',
+      documentNumber: 'A',
+      familyUniqueCode: 1,
+      cycleCode: 10,
+      familyHhId: 'HH-1',
+      fullName: 'A'
+    },
+    {
+      id: 12,
+      role: 'Principle',
+      documentNumber: 'B',
+      familyUniqueCode: 1,
+      cycleCode: 10,
+      familyHhId: 'HH-1',
+      fullName: 'B'
+    }
   ];
 
   const preferred = pickPreferredDistributionMember(withPrinciple);
   assert.equal(preferred.id, 12);
 
   const withoutPrinciple = [
-    { id: 21, role: 'Caregiver', documentNumber: 'X', familyUniqueCode: 2, cycleCode: 10 },
-    { id: 22, role: 'Member', documentNumber: 'Y', familyUniqueCode: 2, cycleCode: 10 }
+    {
+      id: 21,
+      role: 'Caregiver',
+      documentNumber: 'X',
+      familyUniqueCode: 2,
+      cycleCode: 10,
+      familyHhId: 'HH-2',
+      fullName: 'C'
+    },
+    {
+      id: 22,
+      role: 'Member',
+      documentNumber: 'Y',
+      familyUniqueCode: 2,
+      cycleCode: 10,
+      familyHhId: 'HH-2',
+      fullName: 'D'
+    }
   ];
 
   const fallback = pickPreferredDistributionMember(withoutPrinciple);

@@ -1,5 +1,7 @@
 import type { AppMode } from './appMode';
 import type {
+  DistributionDetailData,
+  LocalDistributionEventInput,
   DistributionSearchResult,
   EligibleMembersApiResponse,
   EligibleOverviewSummary
@@ -26,6 +28,12 @@ export interface BertAppApi {
     save(payload: EligibleMembersApiResponse): Promise<EligibleOverviewSummary>;
     sync(params: { fdpCode: string; jwt: string }): Promise<EligibleOverviewSummary>;
     searchDistributionMember(query: string): Promise<DistributionSearchResult | null>;
+    getDistributionDetail(params: {
+      memberId: number;
+      cycleCode: number;
+      familyHhId: string;
+    }): Promise<DistributionDetailData | null>;
+    saveDistributionEvent(payload: LocalDistributionEventInput): Promise<{ id: number }>;
     hasData(): Promise<boolean>;
     getOverviewSummary(): Promise<EligibleOverviewSummary>;
     clear(): Promise<void>;

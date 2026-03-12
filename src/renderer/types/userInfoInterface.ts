@@ -3,6 +3,7 @@ export interface IOffline {
 }
 
 export interface IUserInfo extends IOffline {
+  id?: number;
   accessLevel: string;
   corporatepartner: string | null;
   email: string;
