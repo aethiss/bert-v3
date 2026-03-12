@@ -14,6 +14,7 @@ function toPersistedUserProfile(
   }
 
   return {
+    id: typeof user.id === 'number' ? user.id : null,
     email: user.email,
     fdp: user.fdp,
     fieldOffice: user.fieldOffice
@@ -55,6 +56,7 @@ export const authApi = createApi({
       async queryFn(jwt) {
         try {
           const response = await getUserInfo(jwt);
+          console.info('[auth] getUserInfo raw response', response);
           const profile = toPersistedUserProfile(response);
           await savePersistedUser(profile);
           return { data: profile };

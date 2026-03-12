@@ -1,5 +1,5 @@
 import { ipcMain } from 'electron';
-import type { EligibleMembersApiResponse } from '../../shared/types/eligible';
+import type { EligibleMembersApiResponse, LocalDistributionEventInput } from '../../shared/types/eligible';
 import type { EligibleDataService } from '../services/eligibleDataService';
 
 const CHANNEL_SAVE_ELIGIBLE_DATA = 'eligibleData:save';
@@ -8,6 +8,8 @@ const CHANNEL_GET_OVERVIEW_SUMMARY = 'eligibleData:getOverviewSummary';
 const CHANNEL_CLEAR_ELIGIBLE_DATA = 'eligibleData:clear';
 const CHANNEL_SYNC_ELIGIBLE_DATA = 'eligibleData:sync';
 const CHANNEL_SEARCH_DISTRIBUTION_MEMBER = 'eligibleData:searchDistributionMember';
+const CHANNEL_GET_DISTRIBUTION_DETAIL = 'eligibleData:getDistributionDetail';
+const CHANNEL_SAVE_DISTRIBUTION_EVENT = 'eligibleData:saveDistributionEvent';
 
 function resolveEligibleMembersUrl(fdpCode: string): string {
   const apiBase = process.env.RENDERER_VITE_API_URL ?? process.env.VITE_API_URL;
@@ -34,6 +36,8 @@ export function registerEligibleDataIpc(eligibleDataService: EligibleDataService
   ipcMain.removeHandler(CHANNEL_CLEAR_ELIGIBLE_DATA);
   ipcMain.removeHandler(CHANNEL_SYNC_ELIGIBLE_DATA);
   ipcMain.removeHandler(CHANNEL_SEARCH_DISTRIBUTION_MEMBER);
+  ipcMain.removeHandler(CHANNEL_GET_DISTRIBUTION_DETAIL);
+  ipcMain.removeHandler(CHANNEL_SAVE_DISTRIBUTION_EVENT);
 
   ipcMain.handle(CHANNEL_SAVE_ELIGIBLE_DATA, async (_event, payload: EligibleMembersApiResponse) => {
     return eligibleDataService.saveEligibleMembers(payload);
@@ -53,6 +57,24 @@ export function registerEligibleDataIpc(eligibleDataService: EligibleDataService
 
   ipcMain.handle(CHANNEL_SEARCH_DISTRIBUTION_MEMBER, async (_event, query: string) => {
     return eligibleDataService.searchDistributionMember(query);
+  });
+
+  ipcMain.handle(
+    CHANNEL_GET_DISTRIBUTION_DETAIL,
+    async (
+      _event,
+      params: {
+        memberId: number;
+        cycleCode: number;
+        familyHhId: string;
+      }
+    ) => {
+      return eligibleDataService.getDistributionDetail(params);
+    }
+  );
+
+  ipcMain.handle(CHANNEL_SAVE_DISTRIBUTION_EVENT, async (_event, payload: LocalDistributionEventInput) => {
+    return eligibleDataService.saveDistributionEvent(payload);
   });
 
   ipcMain.handle(

@@ -15,7 +15,9 @@ interface ServerPageProps {
   hasEligibleData: boolean;
   overviewSummary: EligibleOverviewSummary;
   isSynchronizing: boolean;
+  isSynchronizeDisabled: boolean;
   onSynchronize: () => void;
+  pendingDistributionCount: number;
   userEmail: string;
   isOnline: boolean;
   authActionLabel: 'Login' | 'Logout';
@@ -28,7 +30,9 @@ export function ServerPage({
   hasEligibleData,
   overviewSummary,
   isSynchronizing,
+  isSynchronizeDisabled,
   onSynchronize,
+  pendingDistributionCount,
   userEmail,
   isOnline,
   authActionLabel,
@@ -43,6 +47,8 @@ export function ServerPage({
           hasEligibleData={hasEligibleData}
           overviewSummary={overviewSummary}
           isSynchronizing={isSynchronizing}
+          isSynchronizeDisabled={isSynchronizeDisabled}
+          isOnline={isOnline}
           onSynchronize={onSynchronize}
         />
       );
@@ -61,7 +67,16 @@ export function ServerPage({
     }
 
     return <Data />;
-  }, [hasEligibleData, isSynchronizing, onNavigate, onSynchronize, overviewSummary, route]);
+  }, [
+    hasEligibleData,
+    isOnline,
+    isSynchronizeDisabled,
+    isSynchronizing,
+    onNavigate,
+    onSynchronize,
+    overviewSummary,
+    route
+  ]);
 
   return (
     <main className="server-page">
@@ -70,6 +85,7 @@ export function ServerPage({
           items={navItems}
           activeSection={route.section}
           isDataReady={hasEligibleData}
+          pendingDistributionCount={pendingDistributionCount}
           userEmail={userEmail}
           isOnline={isOnline}
           authActionLabel={authActionLabel}

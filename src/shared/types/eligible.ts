@@ -70,6 +70,8 @@ export interface EligibleOverviewSummary {
   totalCycles: number;
   totalHouseholds: number;
   totalMembers: number;
+  pendingDistributionCount: number;
+  lastSynchronizedAt: string | null;
   cycles: EligibleCycleSummary[];
 }
 
@@ -77,6 +79,9 @@ export type DistributionSearchMatch = 'familyUniqueCode' | 'documentNumber';
 
 export interface DistributionSearchMember {
   id: number;
+  cycleCode: number;
+  familyHhId: string;
+  fullName: string;
   role: string | null;
   documentNumber: string | null;
   familyUniqueCode: number;
@@ -85,4 +90,53 @@ export interface DistributionSearchMember {
 export interface DistributionSearchResult {
   match: DistributionSearchMatch;
   member: DistributionSearchMember;
+}
+
+export interface DistributionHouseholdInfo {
+  familyUniqueCode: number;
+  familyHhId: string;
+  cycleCode: number;
+  idmId: string;
+  booklet: string;
+  principle: string;
+  phone: string;
+  registrationDate: string;
+  pbwgs: string;
+  children623: number;
+}
+
+export interface DistributionActiveCycle {
+  cycleCode: number;
+  cycleName: string;
+  assistanceType: string;
+  quantity: string;
+  startDate: string;
+  endDate: string;
+}
+
+export interface DistributionHouseholdMember {
+  memberId: number;
+  cycleCode: number;
+  fullName: string;
+  documentNumber: string | null;
+  age: number | null;
+  role: string | null;
+}
+
+export interface DistributionDetailData {
+  household: DistributionHouseholdInfo;
+  activeCycles: DistributionActiveCycle[];
+  members: DistributionHouseholdMember[];
+  selectedMemberId: number;
+}
+
+export interface LocalDistributionEventInput {
+  familyUniqueCode: number;
+  memberId: number;
+  cycleCode: number;
+  mainOperator: number;
+  mainOperatorFDP: string;
+  subOperator: string | null;
+  appSignature: string;
+  notes: string | null;
 }

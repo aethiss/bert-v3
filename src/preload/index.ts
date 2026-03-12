@@ -43,6 +43,12 @@ const bertAppApi: BertAppApi = {
     searchDistributionMember(query: string) {
       return ipcRenderer.invoke('eligibleData:searchDistributionMember', query);
     },
+    getDistributionDetail(params) {
+      return ipcRenderer.invoke('eligibleData:getDistributionDetail', params);
+    },
+    saveDistributionEvent(payload) {
+      return ipcRenderer.invoke('eligibleData:saveDistributionEvent', payload);
+    },
     hasData() {
       return ipcRenderer.invoke('eligibleData:hasData');
     },

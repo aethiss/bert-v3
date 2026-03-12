@@ -366,12 +366,29 @@ main {
   background: transparent;
   padding: 0;
   margin: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   cursor: pointer;
   color: #677892;
   font-size: 17px;
   font-weight: 500;
   line-height: 1;
   white-space: nowrap;
+}
+
+.server-nav-badge {
+  min-width: 16px;
+  height: 16px;
+  border-radius: 999px;
+  background: #0088cb;
+  color: #ffffff;
+  font-size: 10px;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 4px;
 }
 
 .server-nav-item.active {
@@ -459,6 +476,14 @@ main {
   font-size: 13px;
   font-weight: 500;
   color: #282a2f;
+}
+
+.overview-sync-meta {
+  display: block;
+  margin-top: 4px;
+  font-size: 12px;
+  color: #6b7280;
+  font-weight: 400;
 }
 
 .server-divider {
@@ -609,13 +634,173 @@ main {
   font-size: 13px;
   font-weight: 500;
   padding: 0;
-  cursor: default;
+  cursor: pointer;
 }
 
 .distribution-empty {
   margin: 14px 0 0;
   font-size: 13px;
   color: #6b7280;
+}
+
+.distribution-blocking-alert {
+  margin: 0 0 12px;
+  border: 1px solid #dc2626;
+  background: #fee2e2;
+  color: #991b1b;
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.distribution-detail-layout {
+  display: grid;
+  grid-template-columns: 260px minmax(0, 1fr);
+  gap: 0;
+  margin-top: 10px;
+  border: 1px solid #d3d5d9;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.distribution-detail-sidebar {
+  background: #efeff0;
+  border-right: 1px solid #d3d5d9;
+  padding: 14px 12px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+.distribution-detail-main {
+  background: #efeff0;
+  padding: 12px 16px 16px;
+}
+
+.distribution-detail-section-title {
+  margin: 0 0 8px;
+  font-size: 13px;
+  color: #6b7280;
+}
+
+.distribution-info-list {
+  margin: 0;
+  display: grid;
+  gap: 10px;
+}
+
+.distribution-info-list div {
+  display: grid;
+  grid-template-columns: 120px 1fr;
+  gap: 8px;
+}
+
+.distribution-info-list dt {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.distribution-info-list dd {
+  margin: 0;
+  font-size: 13px;
+  color: #2f3136;
+}
+
+.distribution-sidebar-actions {
+  margin-top: 18px;
+  display: grid;
+  gap: 8px;
+}
+
+.distribution-link-action {
+  border: none;
+  background: transparent;
+  text-align: left;
+  padding: 0;
+  font-size: 13px;
+  color: #2f3136;
+}
+
+.distribution-detail-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 14px;
+}
+
+.distribution-detail-table th,
+.distribution-detail-table td {
+  text-align: left;
+  border-bottom: 1px solid #d9d9de;
+  padding: 8px 8px;
+  font-size: 13px;
+  color: #2f3136;
+}
+
+.distribution-detail-table th {
+  font-weight: 600;
+}
+
+.distribution-notes {
+  width: 100%;
+  border: 1px solid #d3d5d9;
+  border-radius: 12px;
+  background: #efeff0;
+  font-size: 14px;
+  color: #2f3136;
+  padding: 14px 12px;
+  resize: vertical;
+  min-height: 90px;
+}
+
+.distribution-detail-footer {
+  margin-top: 10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.distribution-cancel-btn {
+  background: transparent;
+}
+
+.distribution-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.26);
+  display: grid;
+  place-items: center;
+  z-index: 80;
+  padding: 24px;
+}
+
+.distribution-modal {
+  width: min(440px, 100%);
+  background: #f3f3f4;
+  border: 1px solid #d3d5d9;
+  border-radius: 10px;
+  padding: 16px;
+}
+
+.distribution-modal h2 {
+  margin: 0 0 8px;
+  font-size: 20px;
+  color: #171717;
+}
+
+.distribution-modal p {
+  margin: 0 0 12px;
+  font-size: 13px;
+  color: #4b5563;
+}
+
+.distribution-modal-actions {
+  margin-top: 12px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
 }
 
 .configuration-layout {
@@ -781,6 +966,15 @@ main {
 
   .distribution-search-row {
     grid-template-columns: 1fr;
+  }
+
+  .distribution-detail-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .distribution-detail-sidebar {
+    border-right: none;
+    border-bottom: 1px solid #d3d5d9;
   }
 
   .configuration-layout {

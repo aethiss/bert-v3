@@ -1,4 +1,6 @@
 import type {
+  DistributionDetailData,
+  LocalDistributionEventInput,
   DistributionSearchResult,
   EligibleMembersApiResponse,
   EligibleOverviewSummary
@@ -21,6 +23,20 @@ export async function searchDistributionMember(
   query: string
 ): Promise<DistributionSearchResult | null> {
   return window.bertApp.eligibleData.searchDistributionMember(query);
+}
+
+export async function getDistributionDetail(params: {
+  memberId: number;
+  cycleCode: number;
+  familyHhId: string;
+}): Promise<DistributionDetailData | null> {
+  return window.bertApp.eligibleData.getDistributionDetail(params);
+}
+
+export async function saveDistributionEvent(
+  payload: LocalDistributionEventInput
+): Promise<{ id: number }> {
+  return window.bertApp.eligibleData.saveDistributionEvent(payload);
 }
 
 export async function hasEligibleData(): Promise<boolean> {

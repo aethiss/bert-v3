@@ -11,6 +11,7 @@ interface TopNavigationProps {
   items: ServerTopNavItem[];
   activeSection: ServerSection;
   isDataReady: boolean;
+  pendingDistributionCount: number;
   onSelect: (section: ServerSection) => void;
   userEmail: string;
   isOnline: boolean;
@@ -22,6 +23,7 @@ export function TopNavigation({
   items,
   activeSection,
   isDataReady,
+  pendingDistributionCount,
   onSelect,
   userEmail,
   isOnline,
@@ -60,6 +62,9 @@ export function TopNavigation({
             disabled={isDisabled}
           >
             {item.label}
+            {item.id === 'data' && pendingDistributionCount > 0 ? (
+              <span className="server-nav-badge">{pendingDistributionCount}</span>
+            ) : null}
           </button>
           );
         })}

@@ -11,6 +11,7 @@ const MIGRATIONS: string[] = [
   `
   CREATE TABLE IF NOT EXISTS "user" (
     id INTEGER PRIMARY KEY CHECK (id = 1),
+    user_id INTEGER,
     email TEXT NOT NULL,
     fdp TEXT,
     field_office TEXT,
@@ -84,6 +85,25 @@ const MIGRATIONS: string[] = [
     FOREIGN KEY(cycle_code) REFERENCES cycles(cycle_code) ON DELETE CASCADE,
     FOREIGN KEY(family_hh_id, cycle_code) REFERENCES families(hh_id, cycle_code) ON DELETE CASCADE
   );
+  `,
+  `
+  CREATE TABLE IF NOT EXISTS distribution_queue (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    family_unique_code INTEGER NOT NULL,
+    member_id INTEGER NOT NULL,
+    cycle_code INTEGER NOT NULL,
+    main_operator INTEGER NOT NULL,
+    main_operator_fdp TEXT NOT NULL,
+    sub_operator TEXT,
+    app_signature TEXT NOT NULL,
+    notes TEXT,
+    status TEXT NOT NULL DEFAULT 'pending_local',
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+  );
+  `,
+  `
+  CREATE INDEX IF NOT EXISTS idx_distribution_queue_status_created
+    ON distribution_queue(status, created_at);
   `
 ];
 
@@ -195,6 +215,14 @@ async function ensureEligibleTablesSchema(db: Database): Promise<void> {
   }
 }
 
+async function ensureUserTableSchema(db: Database): Promise<void> {
+  const userColumns = await db.all<Array<{ name: string }>>('PRAGMA table_info("user")');
+  const hasUserId = userColumns.some((column) => column.name === 'user_id');
+  if (!hasUserId) {
+    await db.exec('ALTER TABLE "user" ADD COLUMN user_id INTEGER');
+  }
+}
+
 export async function runMigrations(db: Database): Promise<void> {
   await db.exec('BEGIN TRANSACTION');
 
@@ -202,6 +230,7 @@ export async function runMigrations(db: Database): Promise<void> {
     for (const migration of MIGRATIONS) {
       await db.exec(migration);
     }
+    await ensureUserTableSchema(db);
     await ensureEligibleTablesSchema(db);
 
     await db.exec('COMMIT');
