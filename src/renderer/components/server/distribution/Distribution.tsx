@@ -10,9 +10,13 @@ import {
   saveDistributionEvent,
   searchDistributionMember
 } from '@renderer/services/eligibleDataService';
+import { getPrintSettings } from '@renderer/services/configService';
 import { showErrorToast } from '@renderer/lib/errorToast';
 import { useAppSelector } from '@renderer/store/hooks';
 import { selectCurrentUser } from '@renderer/store/selectors/authSelectors';
+import { DistributionPrintPreview } from '@renderer/components/server/prints/DistributionPrintPreview';
+import { hideMiddleNumbers } from '@renderer/components/server/prints/receiptHelpers';
+import type { ReceiptPayload } from '@renderer/components/server/prints/types';
 
 function toPrincipleFlag(role: string | null): 'true' | 'false' {
   const normalized = (role ?? '').trim().toLowerCase();
@@ -38,6 +42,7 @@ export function Distribution({ route, onNavigate }: ServerRouteComponentProps) {
   const [verifyInput, setVerifyInput] = useState('');
   const [isSavingDistribution, setIsSavingDistribution] = useState(false);
   const [blockingMessage, setBlockingMessage] = useState<string | null>(null);
+  const [printPreviewPayload, setPrintPreviewPayload] = useState<ReceiptPayload | null>(null);
 
   const filteredMembers = useMemo(() => {
     if (!detail || selectedCycleCode === null) {
@@ -167,6 +172,8 @@ export function Distribution({ route, onNavigate }: ServerRouteComponentProps) {
     setIsSavingDistribution(true);
     setBlockingMessage(null);
     try {
+      const selectedCycle =
+        detail.activeCycles.find((cycle) => cycle.cycleCode === selectedCycleCode) ?? null;
       await saveDistributionEvent({
         familyUniqueCode: detail.household.familyUniqueCode,
         memberId: selectedMemberId,
@@ -182,14 +189,37 @@ export function Distribution({ route, onNavigate }: ServerRouteComponentProps) {
 
       setIsVerifyModalOpen(false);
       setVerifyInput('');
-      toast.success('Saved', {
-        description: 'Distribution saved locally.'
-      });
+      const printSettings = await getPrintSettings();
+      if (printSettings.disabled) {
+        toast.success('Saved', {
+          description: 'Distribution saved locally.'
+        });
+        onNavigate({
+          ...route,
+          section: 'distribution',
+          distributionMode: 'search'
+        });
+        return;
+      }
 
-      onNavigate({
-        ...route,
-        section: 'distribution',
-        distributionMode: 'result'
+      setPrintPreviewPayload({
+        title: 'Beneficiary Distribution Receipt',
+        headOfHousehold: detail.household.principle || selectedMember.fullName,
+        receiptId: '1234567890',
+        householdId: String(detail.household.familyUniqueCode),
+        fdp: currentUser?.fdp ?? 'N/A',
+        collectedBy: hideMiddleNumbers(selectedMember.documentNumber ?? String(selectedMember.memberId)),
+        printedAtIso: new Date().toISOString(),
+        cycles: selectedCycle
+          ? [
+              {
+                cycleName: selectedCycle.cycleName,
+                assistanceType: selectedCycle.assistanceType,
+                quantity: selectedCycle.quantity
+              }
+            ]
+          : [],
+        format: printSettings.format
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : '';
@@ -470,6 +500,31 @@ export function Distribution({ route, onNavigate }: ServerRouteComponentProps) {
             </div>
           </div>
         </div>
+      ) : null}
+
+      {printPreviewPayload ? (
+        <DistributionPrintPreview
+          payload={printPreviewPayload}
+          onClose={() => {
+            setPrintPreviewPayload(null);
+            onNavigate({
+              ...route,
+              section: 'distribution',
+              distributionMode: 'search'
+            });
+          }}
+          onPrinted={() => {
+            toast.success('Printed', {
+              description: 'Receipt printed successfully.'
+            });
+            setPrintPreviewPayload(null);
+            onNavigate({
+              ...route,
+              section: 'distribution',
+              distributionMode: 'search'
+            });
+          }}
+        />
       ) : null}
     </section>
   );

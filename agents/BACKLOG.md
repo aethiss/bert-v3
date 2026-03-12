@@ -32,3 +32,9 @@
 - [x] Overview/navigation arricchite con stato sync locale: `Last sync` visibile, badge conteggio distribuzioni pending su voce menu `Data`, refresh summary on `distribution-queue-updated`.
 - [x] Regole operative sincronizzazione: bottone `Synchronize` disabilitato quando utente offline o quando esistono distribuzioni locali pending.
 - [x] Vincolo anti-doppia distribuzione per famiglia/ciclo: blocco salvataggio su combinazione `family_unique_code + cycle_code` con messaggio evidente in UI e copertura integration test dedicata.
+- [x] Configurazione stampa persistita in SQLite (`config`) con tab `Configuration > Printer`: formato ricevuta (`A5`, `80mm`, `58mm`) + opzione `Disable Printing`.
+- [x] Integrazione `react-to-print` nel flusso Distribution: dopo conferma e salvataggio locale apre anteprima fullscreen, stampa ricevuta e ritorno alla ricerca.
+- [x] Template ricevute migrati dalla POC (`A5`, `80mm`, `58mm`) senza dipendenza `react-intl`, mantenendo layout equivalente.
+- [x] Sezione `Data` implementata da mockup Figma: `Push Distribution` con conferma modale (simulazione push + clear locale) e `Export` CSV nativo delle distribuzioni locali.
+- [x] Estensione IPC/preload/service per gestione queue distribuzioni (`getDistributionQueue`, `clearDistributionQueue`) con aggiornamento badge pending in navigation.
+- [x] Correzioni visuali server: rimozione placeholder bianco anomalo in `Configuration`, background sezioni schiarito verso bianco e riduzione tipografia nella sezione `Data`.

@@ -1,4 +1,5 @@
 import type {
+  DistributionQueueItem,
   DistributionDetailData,
   LocalDistributionEventInput,
   DistributionSearchResult,
@@ -37,6 +38,14 @@ export async function saveDistributionEvent(
   payload: LocalDistributionEventInput
 ): Promise<{ id: number }> {
   return window.bertApp.eligibleData.saveDistributionEvent(payload);
+}
+
+export async function getDistributionQueue(): Promise<DistributionQueueItem[]> {
+  return window.bertApp.eligibleData.getDistributionQueue();
+}
+
+export async function clearDistributionQueue(): Promise<{ deleted: number }> {
+  return window.bertApp.eligibleData.clearDistributionQueue();
 }
 
 export async function hasEligibleData(): Promise<boolean> {

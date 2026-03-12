@@ -1,5 +1,9 @@
 import { ipcMain } from 'electron';
-import type { EligibleMembersApiResponse, LocalDistributionEventInput } from '../../shared/types/eligible';
+import type {
+  DistributionQueueItem,
+  EligibleMembersApiResponse,
+  LocalDistributionEventInput
+} from '../../shared/types/eligible';
 import type { EligibleDataService } from '../services/eligibleDataService';
 
 const CHANNEL_SAVE_ELIGIBLE_DATA = 'eligibleData:save';
@@ -10,6 +14,8 @@ const CHANNEL_SYNC_ELIGIBLE_DATA = 'eligibleData:sync';
 const CHANNEL_SEARCH_DISTRIBUTION_MEMBER = 'eligibleData:searchDistributionMember';
 const CHANNEL_GET_DISTRIBUTION_DETAIL = 'eligibleData:getDistributionDetail';
 const CHANNEL_SAVE_DISTRIBUTION_EVENT = 'eligibleData:saveDistributionEvent';
+const CHANNEL_GET_DISTRIBUTION_QUEUE = 'eligibleData:getDistributionQueue';
+const CHANNEL_CLEAR_DISTRIBUTION_QUEUE = 'eligibleData:clearDistributionQueue';
 
 function resolveEligibleMembersUrl(fdpCode: string): string {
   const apiBase = process.env.RENDERER_VITE_API_URL ?? process.env.VITE_API_URL;
@@ -38,6 +44,8 @@ export function registerEligibleDataIpc(eligibleDataService: EligibleDataService
   ipcMain.removeHandler(CHANNEL_SEARCH_DISTRIBUTION_MEMBER);
   ipcMain.removeHandler(CHANNEL_GET_DISTRIBUTION_DETAIL);
   ipcMain.removeHandler(CHANNEL_SAVE_DISTRIBUTION_EVENT);
+  ipcMain.removeHandler(CHANNEL_GET_DISTRIBUTION_QUEUE);
+  ipcMain.removeHandler(CHANNEL_CLEAR_DISTRIBUTION_QUEUE);
 
   ipcMain.handle(CHANNEL_SAVE_ELIGIBLE_DATA, async (_event, payload: EligibleMembersApiResponse) => {
     return eligibleDataService.saveEligibleMembers(payload);
@@ -75,6 +83,14 @@ export function registerEligibleDataIpc(eligibleDataService: EligibleDataService
 
   ipcMain.handle(CHANNEL_SAVE_DISTRIBUTION_EVENT, async (_event, payload: LocalDistributionEventInput) => {
     return eligibleDataService.saveDistributionEvent(payload);
+  });
+
+  ipcMain.handle(CHANNEL_GET_DISTRIBUTION_QUEUE, async (): Promise<DistributionQueueItem[]> => {
+    return eligibleDataService.getDistributionQueue();
+  });
+
+  ipcMain.handle(CHANNEL_CLEAR_DISTRIBUTION_QUEUE, async (): Promise<{ deleted: number }> => {
+    return eligibleDataService.clearDistributionQueue();
   });
 
   ipcMain.handle(

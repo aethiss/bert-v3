@@ -1,5 +1,6 @@
 import type { Database } from 'sqlite';
 import type {
+  DistributionQueueItem,
   DistributionActiveCycle,
   DistributionDetailData,
   DistributionHouseholdInfo,
@@ -105,6 +106,8 @@ export interface EligibleDataService {
     familyHhId: string;
   }): Promise<DistributionDetailData | null>;
   saveDistributionEvent(payload: LocalDistributionEventInput): Promise<{ id: number }>;
+  getDistributionQueue(): Promise<DistributionQueueItem[]>;
+  clearDistributionQueue(): Promise<{ deleted: number }>;
   hasEligibleData(): Promise<boolean>;
   getOverviewSummary(): Promise<EligibleOverviewSummary>;
   clearEligibleData(): Promise<void>;
@@ -757,11 +760,56 @@ export function createEligibleDataService(db: Database): EligibleDataService {
     };
   }
 
+  async function getDistributionQueue(): Promise<DistributionQueueItem[]> {
+    const rows = await db.all<
+      Array<{
+        id: number;
+        familyUniqueCode: number;
+        memberId: number;
+        cycleCode: number;
+        mainOperator: number;
+        mainOperatorFDP: string;
+        subOperator: string | null;
+        appSignature: string;
+        notes: string | null;
+        status: string;
+        createdAt: string;
+      }>
+    >(
+      `
+      SELECT
+        id as id,
+        family_unique_code as familyUniqueCode,
+        member_id as memberId,
+        cycle_code as cycleCode,
+        main_operator as mainOperator,
+        main_operator_fdp as mainOperatorFDP,
+        sub_operator as subOperator,
+        app_signature as appSignature,
+        notes as notes,
+        status as status,
+        created_at as createdAt
+      FROM distribution_queue
+      ORDER BY created_at ASC, id ASC
+      `
+    );
+
+    return (rows ?? []) as DistributionQueueItem[];
+  }
+
+  async function clearDistributionQueue(): Promise<{ deleted: number }> {
+    const countRow = await db.get<{ count: number }>('SELECT COUNT(*) as count FROM distribution_queue');
+    await db.run('DELETE FROM distribution_queue');
+    return { deleted: asNumber(countRow?.count) };
+  }
+
   return {
     saveEligibleMembers,
     searchDistributionMember,
     getDistributionDetail,
     saveDistributionEvent,
+    getDistributionQueue,
+    clearDistributionQueue,
     hasEligibleData,
     getOverviewSummary,
     clearEligibleData

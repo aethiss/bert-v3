@@ -66,7 +66,7 @@ export function ServerPage({
       return <Operations />;
     }
 
-    return <Data />;
+    return <Data pendingDistributionCount={pendingDistributionCount} />;
   }, [
     hasEligibleData,
     isOnline,
@@ -74,6 +74,7 @@ export function ServerPage({
     isSynchronizing,
     onNavigate,
     onSynchronize,
+    pendingDistributionCount,
     overviewSummary,
     route
   ]);

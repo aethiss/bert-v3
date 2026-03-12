@@ -8,7 +8,8 @@
 - [X] Creare tutte le sezioni dell'applicazione per la versione SERVER, seguendo dettagliatamente con la maggiore fedeltà possibile ai valori Figma (spaziature/font/size al pixel) - Le sezioni saranno SOLO DESIGN, al momento nessuna logica che involve le API. Assicurarsi che i componenti siano riutilizzabili e ben strutturati, e che seguano le best practice per la scrittura del codice. La logica della lista members/cycles sarà implementata in un secondo momento, dopo aver completato il design delle sezioni principali dell'applicazione.
 - [X] Creare gli endpoint API riguardanti la gestione dei membri e dei cicli, con la stessa logica che abbiamo implementato nella POC, ma adattata alla nuova struttura del progetto. Assicurarsi che gli endpoint siano ben strutturati e seguano le best practice per la scrittura del codice, e che siano testati con test di unità e di integrazione.
 - [X] Testare il funzionamento e la ricerca dei membri e dei cicli quando l'applicazione e' offline, e cioe' leggendo i dati dal database locale.
-- [ ] Implementare la logica di distribuzione verso i membri delle famiglie, salvare i dati nel database locale.
+- [X] Implementare la logica di distribuzione verso i membri delle famiglie, salvare i dati nel database locale.
+- [ ] Implementare la logica e configurazione della stampa delle ricevute di distribuzione, con layout personalizzabile
 - [ ] Implementare la logica di sincronizzazione dei dati tra il database locale e il server, assicurandosi che i dati vengano sincronizzati correttamente quando l'applicazione torna online.
 
 TODO: I Prossimi task saranno definiti in base alla progressione dello sviluppo, e saranno aggiunti a questa lista.
