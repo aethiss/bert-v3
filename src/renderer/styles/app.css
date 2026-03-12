@@ -261,6 +261,409 @@ main {
   }
 }
 
+.server-page {
+  min-height: 100vh;
+  background: #efeff0;
+}
+
+.server-shell {
+  min-height: 100vh;
+  border: 1px solid #d0d4da;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #efeff0;
+}
+
+.server-top-nav {
+  min-height: 58px;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  border-bottom: 1px solid #d6d8dc;
+  background: #f3f3f4;
+  padding: 0 14px;
+  gap: 18px;
+}
+
+.server-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.server-brand-logo {
+  width: 34px;
+  height: 34px;
+}
+
+.server-brand-name {
+  font-size: 31px;
+  font-weight: 500;
+  color: #18181b;
+  line-height: 1;
+}
+
+.server-brand-version {
+  font-size: 31px;
+  font-weight: 500;
+  color: #18181b;
+  line-height: 1;
+}
+
+.server-main-nav {
+  display: flex;
+  align-items: center;
+  gap: 22px;
+  min-width: 0;
+}
+
+.server-nav-item {
+  border: none;
+  background: transparent;
+  padding: 0;
+  margin: 0;
+  cursor: pointer;
+  color: #677892;
+  font-size: 17px;
+  font-weight: 500;
+  line-height: 1;
+}
+
+.server-nav-item.active {
+  color: #2d2d2f;
+}
+
+.server-status-area {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.server-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: #535861;
+}
+
+.server-status.ready svg {
+  color: #12a150;
+}
+
+.server-status.offline svg {
+  color: #6b7280;
+}
+
+.server-user-avatar {
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  object-fit: cover;
+}
+
+.server-user-email {
+  font-size: 12px;
+  color: #6d7380;
+}
+
+.server-content-block {
+  padding: 30px 28px 0;
+}
+
+.server-page-title {
+  margin: 0 0 20px;
+  font-size: 48px;
+  line-height: 1.1;
+  font-weight: 700;
+  color: #171717;
+}
+
+.server-row-headline {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.server-row-headline p {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 500;
+  color: #282a2f;
+}
+
+.server-divider {
+  border: none;
+  border-top: 1px solid #d9d9de;
+  margin: 14px 0 0;
+}
+
+.server-btn {
+  min-width: 124px;
+  height: 38px;
+  border-radius: 7px;
+  font-size: 17px;
+  font-weight: 400;
+  background: #0088cb;
+}
+
+.overview-cards-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.overview-card {
+  border: 1px solid #d6d6d9;
+  border-radius: 8px;
+  background: #f2f2f3;
+  min-height: 152px;
+  padding: 16px 22px;
+}
+
+.overview-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.overview-card-head p {
+  margin: 0;
+  font-size: 30px;
+  color: #33353a;
+  font-weight: 500;
+}
+
+.overview-card-head svg {
+  color: #8f949f;
+}
+
+.overview-chip {
+  min-width: 84px;
+  height: 30px;
+  border-radius: 999px;
+  background: #0088cb;
+  color: #ffffff;
+  font-size: 26px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.overview-card-value {
+  margin: 6px 0 0;
+  font-size: 49px;
+  font-weight: 700;
+  line-height: 1.2;
+  color: #17181c;
+}
+
+.overview-card-sub {
+  margin: 4px 0 0;
+  font-size: 31px;
+  color: #8f949f;
+}
+
+.server-label {
+  margin: 0 0 8px;
+  font-size: 17px;
+  color: #2c2d31;
+  font-weight: 500;
+}
+
+.distribution-search-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.distribution-search-input {
+  height: 38px;
+  border-color: #d3d5d9;
+  background: #efeff0;
+  font-size: 17px;
+}
+
+.distribution-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 16px;
+}
+
+.distribution-table th,
+.distribution-table td {
+  text-align: left;
+  border-bottom: 1px solid #d9d9de;
+  padding: 8px 8px;
+  font-size: 17px;
+  color: #2f3136;
+}
+
+.distribution-table th {
+  font-weight: 600;
+}
+
+.distribution-action-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.configuration-layout {
+  display: grid;
+  grid-template-columns: 208px minmax(0, 1fr);
+  gap: 28px;
+}
+
+.configuration-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.configuration-tab {
+  border: none;
+  background: transparent;
+  height: 40px;
+  border-radius: 8px;
+  text-align: left;
+  padding: 0 16px;
+  color: #272a2f;
+  font-size: 17px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.configuration-tab.active {
+  background: #e3e4e7;
+}
+
+.configuration-form {
+  max-width: 760px;
+}
+
+.server-form-label {
+  display: block;
+  margin: 0 0 20px;
+  font-size: 34px;
+  font-weight: 600;
+  color: #2a2b30;
+}
+
+.server-form-control {
+  margin-top: 6px;
+  height: 42px;
+  border-color: #d3d5d9;
+  background: #efeff0;
+  font-size: 31px;
+  color: #4a4e56;
+}
+
+.server-form-display {
+  margin-bottom: 18px;
+}
+
+.server-form-muted {
+  margin: 2px 0 0;
+  font-size: 31px;
+  color: #8d929b;
+}
+
+.server-start-btn {
+  margin-top: 12px;
+  min-width: 146px;
+}
+
+.server-placeholder {
+  min-height: 380px;
+  background: #ffffff;
+  border-radius: 8px;
+}
+
+@media (max-width: 1200px) {
+  .server-main-nav {
+    gap: 14px;
+  }
+
+  .server-brand-name,
+  .server-brand-version {
+    font-size: 20px;
+  }
+
+  .server-page-title {
+    font-size: 36px;
+  }
+
+  .overview-cards-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .configuration-layout {
+    grid-template-columns: 180px minmax(0, 1fr);
+  }
+
+  .server-form-label {
+    font-size: 24px;
+  }
+
+  .server-form-control,
+  .server-form-muted,
+  .overview-card-head p,
+  .overview-chip {
+    font-size: 20px;
+  }
+
+  .overview-card-value {
+    font-size: 36px;
+  }
+
+  .overview-card-sub {
+    font-size: 18px;
+  }
+}
+
+@media (max-width: 900px) {
+  .server-top-nav {
+    grid-template-columns: 1fr;
+    padding: 10px 12px;
+    gap: 10px;
+  }
+
+  .server-main-nav {
+    flex-wrap: wrap;
+  }
+
+  .server-status-area {
+    justify-content: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .server-content-block {
+    padding: 20px 14px 0;
+  }
+
+  .server-row-headline {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .overview-cards-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .distribution-search-row {
+    grid-template-columns: 1fr;
+  }
+
+  .configuration-layout {
+    grid-template-columns: 1fr;
+    gap: 14px;
+  }
+}
+
 .dashboard-card {
   width: min(900px, 100%);
   padding: 24px;
