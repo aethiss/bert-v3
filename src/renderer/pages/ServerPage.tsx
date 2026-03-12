@@ -7,10 +7,15 @@ import { Distribution } from '@renderer/components/server/distribution/Distribut
 import { Operations } from '@renderer/components/server/operations/Operations';
 import { Overview } from '@renderer/components/server/overview/Overview';
 import type { ServerRouteState } from '@renderer/components/server/types';
+import type { EligibleOverviewSummary } from '@shared/types/eligible';
 
 interface ServerPageProps {
   route: ServerRouteState;
   onNavigate: (nextRoute: ServerRouteState) => void;
+  hasEligibleData: boolean;
+  overviewSummary: EligibleOverviewSummary;
+  isSynchronizing: boolean;
+  onSynchronize: () => void;
   userEmail: string;
   isOnline: boolean;
   authActionLabel: 'Login' | 'Logout';
@@ -20,19 +25,27 @@ interface ServerPageProps {
 export function ServerPage({
   route,
   onNavigate,
+  hasEligibleData,
+  overviewSummary,
+  isSynchronizing,
+  onSynchronize,
   userEmail,
   isOnline,
   authActionLabel,
   onAuthAction
 }: ServerPageProps) {
-  const navItems = useMemo(
-    () => resolveServerNavItems(route.section, route.overviewMode),
-    [route.overviewMode, route.section]
-  );
+  const navItems = useMemo(() => resolveServerNavItems(), []);
 
   const content = useMemo(() => {
     if (route.section === 'overview') {
-      return <Overview route={route} onNavigate={onNavigate} />;
+      return (
+        <Overview
+          hasEligibleData={hasEligibleData}
+          overviewSummary={overviewSummary}
+          isSynchronizing={isSynchronizing}
+          onSynchronize={onSynchronize}
+        />
+      );
     }
 
     if (route.section === 'distribution') {
@@ -48,7 +61,7 @@ export function ServerPage({
     }
 
     return <Data />;
-  }, [onNavigate, route]);
+  }, [hasEligibleData, isSynchronizing, onNavigate, onSynchronize, overviewSummary, route]);
 
   return (
     <main className="server-page">
@@ -56,16 +69,15 @@ export function ServerPage({
         <TopNavigation
           items={navItems}
           activeSection={route.section}
+          isDataReady={hasEligibleData}
           userEmail={userEmail}
           isOnline={isOnline}
           authActionLabel={authActionLabel}
           onAuthAction={onAuthAction}
           onSelect={(section) => {
-            const nextOverviewMode = section === 'overview' ? route.overviewMode : 'data';
             onNavigate({
               ...route,
-              section,
-              overviewMode: nextOverviewMode
+              section
             });
           }}
         />

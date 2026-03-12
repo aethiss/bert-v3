@@ -9,7 +9,6 @@ export interface ParsedRoute {
 
 export const DEFAULT_SERVER_ROUTE: ServerRouteState = {
   section: 'overview',
-  overviewMode: 'empty',
   distributionMode: 'search',
   configurationTab: 'server'
 };
@@ -28,17 +27,10 @@ export function parseAppHash(hash: string): ParsedRoute {
 
   const section = segments[1];
 
-  if (section === 'home') {
+  if (section === 'overview' || section === 'home') {
     return {
       appRoute: 'server',
-      server: { ...DEFAULT_SERVER_ROUTE, section: 'overview', overviewMode: 'empty' }
-    };
-  }
-
-  if (section === 'overview') {
-    return {
-      appRoute: 'server',
-      server: { ...DEFAULT_SERVER_ROUTE, section: 'overview', overviewMode: 'data' }
+      server: { ...DEFAULT_SERVER_ROUTE, section: 'overview' }
     };
   }
 
@@ -48,7 +40,6 @@ export function parseAppHash(hash: string): ParsedRoute {
       server: {
         ...DEFAULT_SERVER_ROUTE,
         section: 'distribution',
-        overviewMode: 'data',
         distributionMode: segments[2] === 'result' ? 'result' : 'search'
       }
     };
@@ -64,7 +55,6 @@ export function parseAppHash(hash: string): ParsedRoute {
       server: {
         ...DEFAULT_SERVER_ROUTE,
         section: 'configuration',
-        overviewMode: 'data',
         configurationTab
       }
     };
@@ -73,14 +63,14 @@ export function parseAppHash(hash: string): ParsedRoute {
   if (section === 'operations') {
     return {
       appRoute: 'server',
-      server: { ...DEFAULT_SERVER_ROUTE, section: 'operations', overviewMode: 'data' }
+      server: { ...DEFAULT_SERVER_ROUTE, section: 'operations' }
     };
   }
 
   if (section === 'data') {
     return {
       appRoute: 'server',
-      server: { ...DEFAULT_SERVER_ROUTE, section: 'data', overviewMode: 'data' }
+      server: { ...DEFAULT_SERVER_ROUTE, section: 'data' }
     };
   }
 
@@ -92,10 +82,10 @@ export function toAppHash(route: ParsedRoute): string {
     return '#/client/dashboard';
   }
 
-  const { section, overviewMode, distributionMode, configurationTab } = route.server;
+  const { section, distributionMode, configurationTab } = route.server;
 
   if (section === 'overview') {
-    return overviewMode === 'empty' ? '#/server/home' : '#/server/overview';
+    return '#/server/overview';
   }
 
   if (section === 'distribution') {

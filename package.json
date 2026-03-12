@@ -1,6 +1,6 @@
 {
   "name": "bert-v3",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "private": true,
   "description": "BERT desktop app (Electron + Vite + React + TypeScript)",
   "main": "dist/main/main.js",
@@ -19,6 +19,7 @@
     "build:preload": "tsc -p tsconfig.preload.json",
     "build:renderer": "vite build",
     "typecheck": "tsc -p tsconfig.main.json --noEmit && tsc -p tsconfig.preload.json --noEmit && tsc -p tsconfig.renderer.json --noEmit",
+    "test": "npm run build:main && node --test tests/main/*.test.mjs",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "format": "prettier --write .",

@@ -1,7 +1,9 @@
 import { configureStore, isRejected, isRejectedWithValue, type Middleware } from '@reduxjs/toolkit';
 import { setupListeners } from '@reduxjs/toolkit/query';
 import { authApi } from './api/authApi';
+import { eligibleApi } from './api/eligibleApi';
 import { authReducer } from './authSlice';
+import { eligibleReducer } from './eligibleSlice';
 import { showErrorToast } from '@renderer/lib/errorToast';
 
 const errorToastMiddleware: Middleware = () => (next) => (action) => {
@@ -16,10 +18,12 @@ const errorToastMiddleware: Middleware = () => (next) => (action) => {
 export const store = configureStore({
   reducer: {
     auth: authReducer,
-    [authApi.reducerPath]: authApi.reducer
+    eligible: eligibleReducer,
+    [authApi.reducerPath]: authApi.reducer,
+    [eligibleApi.reducerPath]: eligibleApi.reducer
   },
   middleware: (getDefaultMiddleware) =>
-    getDefaultMiddleware().concat(authApi.middleware, errorToastMiddleware)
+    getDefaultMiddleware().concat(authApi.middleware, eligibleApi.middleware, errorToastMiddleware)
 });
 
 setupListeners(store.dispatch);

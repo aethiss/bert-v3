@@ -10,6 +10,7 @@ export interface ServerTopNavItem {
 interface TopNavigationProps {
   items: ServerTopNavItem[];
   activeSection: ServerSection;
+  isDataReady: boolean;
   onSelect: (section: ServerSection) => void;
   userEmail: string;
   isOnline: boolean;
@@ -20,6 +21,7 @@ interface TopNavigationProps {
 export function TopNavigation({
   items,
   activeSection,
+  isDataReady,
   onSelect,
   userEmail,
   isOnline,
@@ -39,16 +41,28 @@ export function TopNavigation({
       </div>
 
       <nav className="server-main-nav" aria-label="Main navigation">
-        {items.map((item) => (
+        {items.map((item) => {
+          const isDisabled = !isDataReady && item.id !== 'overview';
+          return (
           <button
             key={item.id}
             type="button"
-            className={item.id === activeSection ? 'server-nav-item active' : 'server-nav-item'}
-            onClick={() => onSelect(item.id)}
+            className={
+              item.id === activeSection
+                ? `server-nav-item active${isDisabled ? ' disabled' : ''}`
+                : `server-nav-item${isDisabled ? ' disabled' : ''}`
+            }
+            onClick={() => {
+              if (!isDisabled) {
+                onSelect(item.id);
+              }
+            }}
+            disabled={isDisabled}
           >
             {item.label}
           </button>
-        ))}
+          );
+        })}
       </nav>
 
       <div className="server-status-area">
