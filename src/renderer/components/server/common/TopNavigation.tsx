@@ -1,0 +1,59 @@
+import { Printer, Unplug } from 'lucide-react';
+import type { ServerSection } from '@renderer/components/server/types';
+
+export interface ServerTopNavItem {
+  id: ServerSection;
+  label: string;
+}
+
+interface TopNavigationProps {
+  items: ServerTopNavItem[];
+  activeSection: ServerSection;
+  onSelect: (section: ServerSection) => void;
+}
+
+export function TopNavigation({ items, activeSection, onSelect }: TopNavigationProps) {
+  return (
+    <header className="server-top-nav">
+      <div className="server-brand">
+        <img
+          className="server-brand-logo"
+          src="https://uikit.wfp.org/cdn/logos/latest/wfp-logo-emblem-blue-all.svg"
+          alt="World Food Programme"
+        />
+        <span className="server-brand-name">BeRT</span>
+        <span className="server-brand-version">v.2.0</span>
+      </div>
+
+      <nav className="server-main-nav" aria-label="Main navigation">
+        {items.map((item) => (
+          <button
+            key={item.id}
+            type="button"
+            className={item.id === activeSection ? 'server-nav-item active' : 'server-nav-item'}
+            onClick={() => onSelect(item.id)}
+          >
+            {item.label}
+          </button>
+        ))}
+      </nav>
+
+      <div className="server-status-area">
+        <div className="server-status ready">
+          <Printer size={14} />
+          <span>Ready</span>
+        </div>
+        <div className="server-status offline">
+          <Unplug size={14} />
+          <span>Offline</span>
+        </div>
+        <img
+          className="server-user-avatar"
+          src="https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=64&h=64&fit=crop&crop=face"
+          alt="User avatar"
+        />
+        <span className="server-user-email">Mhdalyusuf@gmail.com</span>
+      </div>
+    </header>
+  );
+}

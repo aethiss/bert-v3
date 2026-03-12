@@ -9,3 +9,8 @@
 - [x] Configurazione SQLite locale con inizializzazione DB persistente e tabella `config`.
 - [x] Finestra installer Windows-like per selezione modalità `SERVER/CLIENT` al primo avvio, persistita su SQLite e non modificabile dopo il salvataggio.
 - [x] Miglioramenti DX: alias import non relativi (`@renderer`, `@shared`) e setup `ESLint` + `Prettier`.
+- [x] Flusso di login CIAM implementato: apertura finestra web modale da Electron, intercettazione `key`/`refresh_token` da redirect e chiusura automatica della finestra.
+- [x] Exchange del `key` verso endpoint `oidc/exchange_code` con salvataggio JWT per sessione corrente e preparazione `Authorization: Bearer` per le richieste successive via RTK Query.
+- [x] Pagina Login riallineata al design Figma (`01-Login`) con layout split e componenti UI riutilizzabili in stile shadcn.
+- [x] Implementazione design delle sezioni `SERVER` (Overview, Distribution, Configuration) con navigazione interna testabile e placeholder dedicati per sezioni senza mock finale (`Operations`, `Data`, `Configuration/Printer`, `Configuration/Log`).
+- [x] Rifattorizzazione struttura renderer per modularità: componenti server/client separati, naming allineato alle route e separazione della logica di hash navigation in modulo dedicato.
