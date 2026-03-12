@@ -1,5 +1,6 @@
 import { Printer, Unplug } from 'lucide-react';
 import type { ServerSection } from '@renderer/components/server/types';
+import { Button } from '@ui/components/ui/button';
 
 export interface ServerTopNavItem {
   id: ServerSection;
@@ -10,9 +11,21 @@ interface TopNavigationProps {
   items: ServerTopNavItem[];
   activeSection: ServerSection;
   onSelect: (section: ServerSection) => void;
+  userEmail: string;
+  isOnline: boolean;
+  authActionLabel: 'Login' | 'Logout';
+  onAuthAction: () => void;
 }
 
-export function TopNavigation({ items, activeSection, onSelect }: TopNavigationProps) {
+export function TopNavigation({
+  items,
+  activeSection,
+  onSelect,
+  userEmail,
+  isOnline,
+  authActionLabel,
+  onAuthAction
+}: TopNavigationProps) {
   return (
     <header className="server-top-nav">
       <div className="server-brand">
@@ -43,16 +56,19 @@ export function TopNavigation({ items, activeSection, onSelect }: TopNavigationP
           <Printer size={14} />
           <span>Ready</span>
         </div>
-        <div className="server-status offline">
+        <div className={isOnline ? 'server-status online' : 'server-status offline'}>
           <Unplug size={14} />
-          <span>Offline</span>
+          <span>{isOnline ? 'Online' : 'Offline'}</span>
         </div>
         <img
           className="server-user-avatar"
           src="https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=64&h=64&fit=crop&crop=face"
           alt="User avatar"
         />
-        <span className="server-user-email">Mhdalyusuf@gmail.com</span>
+        <span className="server-user-email">{userEmail}</span>
+        <Button className="server-auth-btn" onClick={onAuthAction}>
+          {authActionLabel}
+        </Button>
       </div>
     </header>
   );

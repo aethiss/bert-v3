@@ -11,9 +11,20 @@ import type { ServerRouteState } from '@renderer/components/server/types';
 interface ServerPageProps {
   route: ServerRouteState;
   onNavigate: (nextRoute: ServerRouteState) => void;
+  userEmail: string;
+  isOnline: boolean;
+  authActionLabel: 'Login' | 'Logout';
+  onAuthAction: () => void;
 }
 
-export function ServerPage({ route, onNavigate }: ServerPageProps) {
+export function ServerPage({
+  route,
+  onNavigate,
+  userEmail,
+  isOnline,
+  authActionLabel,
+  onAuthAction
+}: ServerPageProps) {
   const navItems = useMemo(
     () => resolveServerNavItems(route.section, route.overviewMode),
     [route.overviewMode, route.section]
@@ -45,6 +56,10 @@ export function ServerPage({ route, onNavigate }: ServerPageProps) {
         <TopNavigation
           items={navItems}
           activeSection={route.section}
+          userEmail={userEmail}
+          isOnline={isOnline}
+          authActionLabel={authActionLabel}
+          onAuthAction={onAuthAction}
           onSelect={(section) => {
             const nextOverviewMode = section === 'overview' ? route.overviewMode : 'data';
             onNavigate({

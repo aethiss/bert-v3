@@ -5,18 +5,85 @@ import { DashboardPage } from '@renderer/pages/DashboardPage';
 import { LoginPage } from '@renderer/pages/LoginPage';
 import { ServerPage } from '@renderer/pages/ServerPage';
 import type { ServerRouteState } from '@renderer/components/server/types';
+import type { ExchangeCodeResult } from '@shared/types/ipc/auth';
 import {
   parseAppHash,
   toAppHash,
   type ParsedRoute
 } from '@renderer/navigation/appHashNavigation';
-import { useAppSelector } from '@renderer/store/hooks';
-import { selectIsAuthenticated } from '@renderer/store/selectors/authSelectors';
+import {
+  clearPersistedUser,
+  getPersistedUser,
+  openCiamLogin
+} from '@renderer/services/authService';
+import { authApi } from '@renderer/store/api/authApi';
+import {
+  clearAuthSession,
+  restoreOfflineSession,
+  setOnlineAuthSession
+} from '@renderer/store/authSlice';
+import { useAppDispatch, useAppSelector } from '@renderer/store/hooks';
+import {
+  selectCurrentUser,
+  selectIsAuthenticated,
+  selectIsOnline
+} from '@renderer/store/selectors/authSelectors';
+import { showErrorToast } from '@renderer/lib/errorToast';
+import { isRtkLikeError, toErrorMessage } from '@renderer/lib/errorMessage';
 
 export function App() {
+  const dispatch = useAppDispatch();
   const installerModeSetup = useInstallerModeSetup();
   const isAuthenticated = useAppSelector(selectIsAuthenticated);
+  const isOnline = useAppSelector(selectIsOnline);
+  const currentUser = useAppSelector(selectCurrentUser);
   const [route, setRoute] = useState<ParsedRoute>(() => parseAppHash(window.location.hash));
+  const [isHydratingAuth, setIsHydratingAuth] = useState(true);
+
+  useEffect(() => {
+    let mounted = true;
+
+    const hydrateUser = async () => {
+      try {
+        const persistedUser = await getPersistedUser();
+        if (!mounted || !persistedUser) {
+          return;
+        }
+
+        dispatch(restoreOfflineSession(persistedUser));
+      } catch (error) {
+        showErrorToast(error);
+      } finally {
+        if (mounted) {
+          setIsHydratingAuth(false);
+        }
+      }
+    };
+
+    void hydrateUser();
+
+    return () => {
+      mounted = false;
+    };
+  }, [dispatch]);
+
+  useEffect(() => {
+    const onWindowError = (event: ErrorEvent) => {
+      showErrorToast(event.error ?? event.message);
+    };
+
+    const onUnhandledRejection = (event: PromiseRejectionEvent) => {
+      showErrorToast(event.reason);
+    };
+
+    window.addEventListener('error', onWindowError);
+    window.addEventListener('unhandledrejection', onUnhandledRejection);
+
+    return () => {
+      window.removeEventListener('error', onWindowError);
+      window.removeEventListener('unhandledrejection', onUnhandledRejection);
+    };
+  }, []);
 
   useEffect(() => {
     const onHashChange = () => {
@@ -54,7 +121,60 @@ export function App() {
     setRoute(next);
   }, []);
 
+  const runOnlineLoginFlow = useCallback(async () => {
+    const ciamResult = await openCiamLogin();
+
+    const exchangeRequest = dispatch(
+      authApi.endpoints.exchangeCode.initiate(ciamResult.exchangeKey, { forceRefetch: true })
+    );
+    let tokenResponse: ExchangeCodeResult;
+    try {
+      tokenResponse = await exchangeRequest.unwrap();
+    } finally {
+      exchangeRequest.unsubscribe();
+    }
+
+    const jwt = tokenResponse.idToken;
+    const userInfoRequest = dispatch(authApi.endpoints.getUserInfo.initiate(jwt, { forceRefetch: true }));
+    let profile;
+    try {
+      profile = await userInfoRequest.unwrap();
+    } finally {
+      userInfoRequest.unsubscribe();
+    }
+
+    dispatch(
+      setOnlineAuthSession({
+        jwt,
+        refreshToken: tokenResponse.refreshToken ?? ciamResult.refreshToken,
+        exchangeKey: ciamResult.exchangeKey,
+        user: profile
+      })
+    );
+  }, [dispatch]);
+
+  const handleServerAuthAction = useCallback(async () => {
+    try {
+      if (isOnline) {
+        await clearPersistedUser();
+        dispatch(clearAuthSession());
+        return;
+      }
+
+      await runOnlineLoginFlow();
+    } catch (error) {
+      console.error('[auth] Unable to complete auth action from server navigation', error);
+      if (!isRtkLikeError(error)) {
+        showErrorToast(toErrorMessage(error));
+      }
+    }
+  }, [dispatch, isOnline, runOnlineLoginFlow]);
+
   const appContent = useMemo(() => {
+    if (isHydratingAuth) {
+      return null;
+    }
+
     if (!isAuthenticated) {
       return <LoginPage />;
     }
@@ -63,8 +183,27 @@ export function App() {
       return <DashboardPage />;
     }
 
-    return <ServerPage route={route.server} onNavigate={navigateServer} />;
-  }, [isAuthenticated, navigateServer, route]);
+    return (
+      <ServerPage
+        route={route.server}
+        onNavigate={navigateServer}
+        userEmail={currentUser?.email ?? ''}
+        isOnline={isOnline}
+        authActionLabel={isOnline ? 'Logout' : 'Login'}
+        onAuthAction={() => {
+          void handleServerAuthAction();
+        }}
+      />
+    );
+  }, [
+    currentUser?.email,
+    handleServerAuthAction,
+    isAuthenticated,
+    isHydratingAuth,
+    isOnline,
+    navigateServer,
+    route
+  ]);
 
   return (
     <>

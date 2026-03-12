@@ -7,6 +7,15 @@ const MIGRATIONS: string[] = [
     value TEXT NOT NULL,
     updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
   );
+  `,
+  `
+  CREATE TABLE IF NOT EXISTS "user" (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    email TEXT NOT NULL,
+    fdp TEXT,
+    field_office TEXT,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+  );
   `
 ];
 

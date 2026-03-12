@@ -1,8 +1,14 @@
 import { BrowserWindow, ipcMain } from 'electron';
-import type { CiamLoginResult } from '../../shared/types/ipc/auth';
+import type { CiamLoginResult, ExchangeCodeResult } from '../../shared/types/ipc/auth';
+import type { PersistedUserProfile, UserInfoApiModel } from '../../shared/types/user';
+import type { UserService } from '../services/userService';
 
 const CHANNEL_OPEN_CIAM_LOGIN = 'auth:openCiamLogin';
 const CHANNEL_EXCHANGE_CODE = 'auth:exchangeCode';
+const CHANNEL_GET_USER_INFO = 'auth:getUserInfo';
+const CHANNEL_GET_PERSISTED_USER = 'auth:getPersistedUser';
+const CHANNEL_SAVE_PERSISTED_USER = 'auth:savePersistedUser';
+const CHANNEL_CLEAR_PERSISTED_USER = 'auth:clearPersistedUser';
 
 function tryParseUrl(rawUrl: string): URL | null {
   try {
@@ -58,13 +64,51 @@ function resolveExchangeCodeUrl(exchangeKey: string): string {
   return parsed.toString();
 }
 
-function normalizeExchangeResponse(response: string): string {
-  const trimmed = response.trim();
-  if (trimmed.startsWith('"') && trimmed.endsWith('"')) {
-    return trimmed.slice(1, -1);
+function resolveUserInfoUrl(): string {
+  const apiBase = process.env.RENDERER_VITE_API_URL ?? process.env.VITE_API_URL;
+  if (!apiBase) {
+    throw new Error('Missing API base URL. Set RENDERER_VITE_API_URL or VITE_API_URL.');
   }
 
-  return trimmed;
+  return new URL('/api/v1/userinfo/', apiBase).toString();
+}
+
+function normalizeExchangeResponse(response: string): ExchangeCodeResult {
+  const trimmed = response.trim();
+  const unwrapped = trimmed.startsWith("'") && trimmed.endsWith("'") ? trimmed.slice(1, -1) : trimmed;
+
+  const parseNestedJson = (value: string): unknown => {
+    try {
+      const parsed = JSON.parse(value) as unknown;
+      if (typeof parsed === 'string') {
+        return JSON.parse(parsed) as unknown;
+      }
+      return parsed;
+    } catch {
+      return value;
+    }
+  };
+
+  const parsed = parseNestedJson(unwrapped);
+
+  if (typeof parsed === 'string') {
+    return {
+      idToken: parsed,
+      refreshToken: null
+    };
+  }
+
+  if (typeof parsed === 'object' && parsed !== null) {
+    const payload = parsed as { id_token?: unknown; refresh_token?: unknown };
+    if (typeof payload.id_token === 'string' && payload.id_token.length > 0) {
+      return {
+        idToken: payload.id_token,
+        refreshToken: typeof payload.refresh_token === 'string' ? payload.refresh_token : null
+      };
+    }
+  }
+
+  throw new Error('Exchange code response format is not valid.');
 }
 
 async function openCiamLoginWindow(
@@ -138,9 +182,16 @@ async function openCiamLoginWindow(
   });
 }
 
-export function registerAuthIpc(getMainWindow: () => BrowserWindow | null): void {
+export function registerAuthIpc(
+  getMainWindow: () => BrowserWindow | null,
+  userService: UserService
+): void {
   ipcMain.removeHandler(CHANNEL_OPEN_CIAM_LOGIN);
   ipcMain.removeHandler(CHANNEL_EXCHANGE_CODE);
+  ipcMain.removeHandler(CHANNEL_GET_USER_INFO);
+  ipcMain.removeHandler(CHANNEL_GET_PERSISTED_USER);
+  ipcMain.removeHandler(CHANNEL_SAVE_PERSISTED_USER);
+  ipcMain.removeHandler(CHANNEL_CLEAR_PERSISTED_USER);
 
   ipcMain.handle(CHANNEL_OPEN_CIAM_LOGIN, async () => {
     const mainWindow = getMainWindow();
@@ -180,13 +231,57 @@ export function registerAuthIpc(getMainWindow: () => BrowserWindow | null): void
       throw new Error(`Exchange code failed (${response.status} ${response.statusText}).`);
     }
 
-    const jwt = normalizeExchangeResponse(rawBody);
-    if (!jwt) {
-      console.error('[auth] Exchange code returned empty body');
-      throw new Error('Exchange code returned an empty token.');
+    const tokenResponse = normalizeExchangeResponse(rawBody);
+    if (!tokenResponse.idToken) {
+      console.error('[auth] Exchange code returned empty id_token');
+      throw new Error('Exchange code returned an empty id_token.');
     }
 
-    console.info('[auth] JWT received', { jwt: maskToken(jwt) });
-    return jwt;
+    console.info('[auth] JWT received', {
+      jwt: maskToken(tokenResponse.idToken),
+      hasRefreshToken: Boolean(tokenResponse.refreshToken)
+    });
+    return tokenResponse;
+  });
+
+  ipcMain.handle(CHANNEL_GET_USER_INFO, async (_event, jwt: string) => {
+    if (!jwt) {
+      throw new Error('Missing JWT token for user info request.');
+    }
+
+    const userInfoUrl = resolveUserInfoUrl();
+    console.info('[auth] Fetching user info', { userInfoUrl });
+
+    const response = await fetch(userInfoUrl, {
+      method: 'GET',
+      headers: {
+        authorization: `Bearer ${jwt}`
+      }
+    });
+
+    const rawBody = await response.text();
+    if (!response.ok) {
+      console.error('[auth] User info request failed', {
+        status: response.status,
+        statusText: response.statusText,
+        bodyPreview: rawBody.slice(0, 200)
+      });
+      throw new Error(`User info request failed (${response.status} ${response.statusText}).`);
+    }
+
+    const parsedBody = JSON.parse(rawBody) as UserInfoApiModel[];
+    return parsedBody;
+  });
+
+  ipcMain.handle(CHANNEL_GET_PERSISTED_USER, async () => {
+    return userService.getUserProfile();
+  });
+
+  ipcMain.handle(CHANNEL_SAVE_PERSISTED_USER, async (_event, profile: PersistedUserProfile) => {
+    await userService.saveUserProfile(profile);
+  });
+
+  ipcMain.handle(CHANNEL_CLEAR_PERSISTED_USER, async () => {
+    await userService.clearUserProfile();
   });
 }
