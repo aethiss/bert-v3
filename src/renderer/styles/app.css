@@ -305,43 +305,43 @@ main {
 
 .server-shell {
   min-height: 100vh;
-  border: 1px solid #d0d4da;
-  border-radius: 8px;
+  border: 1px solid #d6d8dc;
+  border-radius: 0;
   overflow: hidden;
   background: #efeff0;
 }
 
 .server-top-nav {
-  min-height: 58px;
-  display: grid;
-  grid-template-columns: auto 1fr auto;
+  min-height: 60px;
+  display: flex;
   align-items: center;
   border-bottom: 1px solid #d6d8dc;
   background: #f3f3f4;
-  padding: 0 14px;
-  gap: 18px;
+  padding: 0 16px;
+  gap: 20px;
 }
 
 .server-brand {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
+  flex-shrink: 0;
 }
 
 .server-brand-logo {
-  width: 34px;
-  height: 34px;
+  width: 36px;
+  height: 36px;
 }
 
 .server-brand-name {
-  font-size: 31px;
+  font-size: 20px;
   font-weight: 500;
   color: #18181b;
   line-height: 1;
 }
 
 .server-brand-version {
-  font-size: 31px;
+  font-size: 18px;
   font-weight: 500;
   color: #18181b;
   line-height: 1;
@@ -350,8 +350,15 @@ main {
 .server-main-nav {
   display: flex;
   align-items: center;
-  gap: 22px;
+  gap: 20px;
   min-width: 0;
+  flex: 1;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.server-main-nav::-webkit-scrollbar {
+  display: none;
 }
 
 .server-nav-item {
@@ -364,24 +371,32 @@ main {
   font-size: 17px;
   font-weight: 500;
   line-height: 1;
+  white-space: nowrap;
 }
 
 .server-nav-item.active {
   color: #2d2d2f;
 }
 
+.server-nav-item.disabled {
+  color: #a2a9b5;
+  cursor: not-allowed;
+}
+
 .server-status-area {
   display: flex;
   align-items: center;
   gap: 14px;
+  flex-shrink: 0;
 }
 
 .server-status {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  font-size: 13px;
+  font-size: 12px;
   color: #535861;
+  white-space: nowrap;
 }
 
 .server-status.ready svg {
@@ -406,6 +421,10 @@ main {
 .server-user-email {
   font-size: 12px;
   color: #6d7380;
+  max-width: 170px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .server-auth-btn {
@@ -417,12 +436,12 @@ main {
 }
 
 .server-content-block {
-  padding: 30px 28px 0;
+  padding: 24px 20px 0;
 }
 
 .server-page-title {
-  margin: 0 0 20px;
-  font-size: 48px;
+  margin: 0 0 12px;
+  font-size: clamp(22px, 2.8vw, 42px);
   line-height: 1.1;
   font-weight: 700;
   color: #171717;
@@ -437,7 +456,7 @@ main {
 
 .server-row-headline p {
   margin: 0;
-  font-size: 17px;
+  font-size: 13px;
   font-weight: 500;
   color: #282a2f;
 }
@@ -445,79 +464,97 @@ main {
 .server-divider {
   border: none;
   border-top: 1px solid #d9d9de;
-  margin: 14px 0 0;
+  margin: 12px 0 0;
 }
 
 .server-btn {
   min-width: 124px;
-  height: 38px;
+  height: 40px;
   border-radius: 7px;
-  font-size: 17px;
-  font-weight: 400;
+  font-size: 13px;
+  font-weight: 500;
   background: #0088cb;
 }
 
 .overview-cards-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 14px;
+  grid-template-columns: repeat(4, minmax(220px, 1fr));
+  gap: 12px;
+}
+
+.overview-cards-grid-with-sync {
+  margin-top: 14px;
 }
 
 .overview-card {
   border: 1px solid #d6d6d9;
-  border-radius: 8px;
+  border-radius: 9px;
   background: #f2f2f3;
-  min-height: 152px;
-  padding: 16px 22px;
+  min-height: 184px;
+  padding: 14px 16px 16px;
+  overflow: hidden;
 }
 
 .overview-card-head {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 8px;
 }
 
 .overview-card-head p {
   margin: 0;
-  font-size: 30px;
+  font-size: clamp(16px, 1.25vw, 24px);
   color: #33353a;
   font-weight: 500;
+  line-height: 1.12;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
 }
 
 .overview-card-head svg {
   color: #8f949f;
+  flex-shrink: 0;
 }
 
 .overview-chip {
-  min-width: 84px;
-  height: 30px;
+  min-width: 66px;
+  padding: 0 12px;
+  height: 24px;
   border-radius: 999px;
   background: #0088cb;
   color: #ffffff;
-  font-size: 26px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.2px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  flex-shrink: 0;
 }
 
 .overview-card-value {
-  margin: 6px 0 0;
-  font-size: 49px;
+  margin: 8px 0 0;
+  font-size: clamp(24px, 2.4vw, 42px);
   font-weight: 700;
-  line-height: 1.2;
+  line-height: 1.08;
   color: #17181c;
 }
 
 .overview-card-sub {
-  margin: 4px 0 0;
-  font-size: 31px;
+  margin: 6px 0 0;
+  font-size: clamp(14px, 1.35vw, 24px);
+  line-height: 1.18;
   color: #8f949f;
+  word-break: break-word;
 }
 
 .server-label {
   margin: 0 0 8px;
-  font-size: 17px;
+  font-size: 14px;
   color: #2c2d31;
   font-weight: 500;
 }
@@ -533,7 +570,7 @@ main {
   height: 38px;
   border-color: #d3d5d9;
   background: #efeff0;
-  font-size: 17px;
+  font-size: 14px;
 }
 
 .distribution-table {
@@ -547,7 +584,7 @@ main {
   text-align: left;
   border-bottom: 1px solid #d9d9de;
   padding: 8px 8px;
-  font-size: 17px;
+  font-size: 13px;
   color: #2f3136;
 }
 
@@ -581,7 +618,7 @@ main {
   text-align: left;
   padding: 0 16px;
   color: #272a2f;
-  font-size: 17px;
+  font-size: 14px;
   font-weight: 600;
   cursor: pointer;
 }
@@ -597,7 +634,7 @@ main {
 .server-form-label {
   display: block;
   margin: 0 0 20px;
-  font-size: 34px;
+  font-size: 24px;
   font-weight: 600;
   color: #2a2b30;
 }
@@ -607,7 +644,7 @@ main {
   height: 42px;
   border-color: #d3d5d9;
   background: #efeff0;
-  font-size: 31px;
+  font-size: 16px;
   color: #4a4e56;
 }
 
@@ -617,7 +654,7 @@ main {
 
 .server-form-muted {
   margin: 2px 0 0;
-  font-size: 31px;
+  font-size: 14px;
   color: #8d929b;
 }
 
@@ -639,15 +676,15 @@ main {
 
   .server-brand-name,
   .server-brand-version {
-    font-size: 20px;
+    font-size: 18px;
   }
 
   .server-page-title {
-    font-size: 36px;
+    font-size: 34px;
   }
 
   .overview-cards-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(2, minmax(220px, 1fr));
   }
 
   .configuration-layout {
@@ -655,18 +692,18 @@ main {
   }
 
   .server-form-label {
-    font-size: 24px;
+    font-size: 20px;
   }
 
   .server-form-control,
   .server-form-muted,
   .overview-card-head p,
   .overview-chip {
-    font-size: 20px;
+    font-size: 14px;
   }
 
   .overview-card-value {
-    font-size: 36px;
+    font-size: 34px;
   }
 
   .overview-card-sub {
@@ -674,20 +711,35 @@ main {
   }
 }
 
-@media (max-width: 900px) {
+@media (max-width: 980px) {
   .server-top-nav {
-    grid-template-columns: 1fr;
+    flex-wrap: wrap;
     padding: 10px 12px;
-    gap: 10px;
+    gap: 12px;
   }
 
   .server-main-nav {
-    flex-wrap: wrap;
+    order: 3;
+    width: 100%;
+    padding-bottom: 6px;
+    border-top: 1px solid #e0e3e7;
+    padding-top: 8px;
   }
 
   .server-status-area {
+    margin-left: auto;
+  }
+}
+
+@media (max-width: 900px) {
+  .server-status-area {
     justify-content: flex-start;
     flex-wrap: wrap;
+    row-gap: 8px;
+  }
+
+  .server-user-email {
+    max-width: 120px;
   }
 
   .server-auth-btn {

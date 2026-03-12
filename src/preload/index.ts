@@ -32,6 +32,23 @@ const bertAppApi: BertAppApi = {
     setMode(mode: AppMode) {
       return ipcRenderer.invoke('installer:setMode', mode) as Promise<InstallerModeState>;
     }
+  },
+  eligibleData: {
+    save(payload) {
+      return ipcRenderer.invoke('eligibleData:save', payload);
+    },
+    sync(params) {
+      return ipcRenderer.invoke('eligibleData:sync', params);
+    },
+    hasData() {
+      return ipcRenderer.invoke('eligibleData:hasData');
+    },
+    getOverviewSummary() {
+      return ipcRenderer.invoke('eligibleData:getOverviewSummary');
+    },
+    clear() {
+      return ipcRenderer.invoke('eligibleData:clear');
+    }
   }
 };
 

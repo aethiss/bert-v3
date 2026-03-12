@@ -17,17 +17,25 @@ import {
   openCiamLogin
 } from '@renderer/services/authService';
 import { authApi } from '@renderer/store/api/authApi';
+import { eligibleApi } from '@renderer/store/api/eligibleApi';
+import { getEligibleOverviewSummary } from '@renderer/services/eligibleDataService';
 import {
   clearAuthSession,
   restoreOfflineSession,
   setOnlineAuthSession
 } from '@renderer/store/authSlice';
+import { setEligibleOverviewSummary } from '@renderer/store/eligibleSlice';
 import { useAppDispatch, useAppSelector } from '@renderer/store/hooks';
 import {
   selectCurrentUser,
   selectIsAuthenticated,
-  selectIsOnline
+  selectIsOnline,
+  selectJwt
 } from '@renderer/store/selectors/authSelectors';
+import {
+  selectEligibleOverviewSummary,
+  selectHasEligibleData
+} from '@renderer/store/selectors/eligibleSelectors';
 import { showErrorToast } from '@renderer/lib/errorToast';
 import { isRtkLikeError, toErrorMessage } from '@renderer/lib/errorMessage';
 
@@ -36,9 +44,18 @@ export function App() {
   const installerModeSetup = useInstallerModeSetup();
   const isAuthenticated = useAppSelector(selectIsAuthenticated);
   const isOnline = useAppSelector(selectIsOnline);
+  const jwt = useAppSelector(selectJwt);
   const currentUser = useAppSelector(selectCurrentUser);
+  const hasEligibleData = useAppSelector(selectHasEligibleData);
+  const eligibleOverviewSummary = useAppSelector(selectEligibleOverviewSummary);
   const [route, setRoute] = useState<ParsedRoute>(() => parseAppHash(window.location.hash));
   const [isHydratingAuth, setIsHydratingAuth] = useState(true);
+  const [isSynchronizing, setIsSynchronizing] = useState(false);
+
+  const refreshEligibleSummary = useCallback(async () => {
+    const summary = await getEligibleOverviewSummary();
+    dispatch(setEligibleOverviewSummary(summary));
+  }, [dispatch]);
 
   useEffect(() => {
     let mounted = true;
@@ -47,10 +64,12 @@ export function App() {
       try {
         const persistedUser = await getPersistedUser();
         if (!mounted || !persistedUser) {
+          await refreshEligibleSummary();
           return;
         }
 
         dispatch(restoreOfflineSession(persistedUser));
+        await refreshEligibleSummary();
       } catch (error) {
         showErrorToast(error);
       } finally {
@@ -65,7 +84,7 @@ export function App() {
     return () => {
       mounted = false;
     };
-  }, [dispatch]);
+  }, [dispatch, refreshEligibleSummary]);
 
   useEffect(() => {
     const onWindowError = (event: ErrorEvent) => {
@@ -102,9 +121,19 @@ export function App() {
     }
 
     if (!window.location.hash) {
-      window.location.hash = '#/server/home';
+      window.location.hash = '#/server/overview';
     }
   }, [isAuthenticated, installerModeSetup.mode]);
+
+  useEffect(() => {
+    if (!isAuthenticated || route.appRoute !== 'server') {
+      return;
+    }
+
+    if (!hasEligibleData && route.server.section !== 'overview') {
+      window.location.hash = '#/server/overview';
+    }
+  }, [hasEligibleData, isAuthenticated, route]);
 
   const navigateServer = useCallback((nextServerRoute: ServerRouteState) => {
     const next = {
@@ -151,7 +180,34 @@ export function App() {
         user: profile
       })
     );
-  }, [dispatch]);
+    await refreshEligibleSummary();
+  }, [dispatch, refreshEligibleSummary]);
+
+  const synchronizeEligibleData = useCallback(async () => {
+    const fdpCode = (currentUser?.fdp ?? currentUser?.fieldOffice ?? '').trim();
+    if (!fdpCode) {
+      throw new Error('Missing FDP code for synchronization.');
+    }
+    if (!jwt?.trim()) {
+      throw new Error('Missing JWT token for synchronization.');
+    }
+
+    setIsSynchronizing(true);
+    const syncRequest = dispatch(
+      eligibleApi.endpoints.getEligibleMembers.initiate(
+        { fdpCode, jwt: jwt.trim() },
+        { forceRefetch: true }
+      )
+    );
+
+    try {
+      await syncRequest.unwrap();
+      await refreshEligibleSummary();
+    } finally {
+      syncRequest.unsubscribe();
+      setIsSynchronizing(false);
+    }
+  }, [currentUser?.fdp, currentUser?.fieldOffice, dispatch, jwt, refreshEligibleSummary]);
 
   const handleServerAuthAction = useCallback(async () => {
     try {
@@ -187,6 +243,20 @@ export function App() {
       <ServerPage
         route={route.server}
         onNavigate={navigateServer}
+        hasEligibleData={hasEligibleData}
+        overviewSummary={eligibleOverviewSummary}
+        isSynchronizing={isSynchronizing}
+        onSynchronize={() => {
+          void (async () => {
+            try {
+              await synchronizeEligibleData();
+            } catch (error) {
+              if (!isRtkLikeError(error)) {
+                showErrorToast(toErrorMessage(error));
+              }
+            }
+          })();
+        }}
         userEmail={currentUser?.email ?? ''}
         isOnline={isOnline}
         authActionLabel={isOnline ? 'Logout' : 'Login'}
@@ -197,12 +267,16 @@ export function App() {
     );
   }, [
     currentUser?.email,
+    eligibleOverviewSummary,
+    hasEligibleData,
     handleServerAuthAction,
     isAuthenticated,
     isHydratingAuth,
     isOnline,
+    isSynchronizing,
     navigateServer,
-    route
+    route,
+    synchronizeEligibleData
   ]);
 
   return (

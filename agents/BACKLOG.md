@@ -18,3 +18,9 @@
 - [x] Integrazione endpoint `userInfo` nel flusso login con salvataggio locale di `email`, `fdp`, `fieldOffice` e stato online/offline dinamico nella top navigation (`Login` da offline, `Logout` da online).
 - [x] Correzione parsing `exchange_code`: estrazione robusta di `id_token` (JWT effettivo) e `refresh_token` da payload stringificato.
 - [x] Sistema toast globale error-first in alto a destra (`sonner`/shadcn) collegato a errori RTK Query, catch applicativi e runtime errors (`error`, `unhandledrejection`).
+- [x] Endpoint `getEligibleMembers` implementato con sincronizzazione via IPC in `main` (no fetch dal renderer) per evitare errori CORS/`Failed to fetch`, con risoluzione endpoint da env e supporto parametri query.
+- [x] Persistenza locale dati eligible in SQLite con schema normalizzato: tabelle `eligible_meta`, `cycles`, `families`, `members` + service dedicato per `save/hasData/getOverviewSummary/clear`.
+- [x] Hardening ingest API verso SQLite: parsing difensivo, fallback sui campi chiave, gestione record incompleti e `UPSERT` su `cycles/families/members` per tollerare payload duplicati o parziali.
+- [x] Refactor schema per storico completo per ciclo: `families` con PK composta (`hh_id`, `cycle_code`) e FK composta da `members`, con migrazione compatibile per database esistenti.
+- [x] Overview collegata ai dati reali sincronizzati: bottone `Synchronize` attivo in pagina, cards alimentate da summary locale e lock delle altre sezioni finché i dati non sono disponibili.
+- [x] Miglioramenti responsive/design sezione server (nav + overview) con allineamento progressivo agli export Figma, riduzione tipografie fuori dalla navigazione e gestione robusta overflow testi lunghi.
