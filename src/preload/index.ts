@@ -11,6 +11,18 @@ const bertAppApi: BertAppApi = {
     },
     exchangeCode(exchangeKey: string) {
       return ipcRenderer.invoke('auth:exchangeCode', exchangeKey);
+    },
+    getUserInfo(jwt: string) {
+      return ipcRenderer.invoke('auth:getUserInfo', jwt);
+    },
+    getPersistedUser() {
+      return ipcRenderer.invoke('auth:getPersistedUser');
+    },
+    savePersistedUser(user) {
+      return ipcRenderer.invoke('auth:savePersistedUser', user);
+    },
+    clearPersistedUser() {
+      return ipcRenderer.invoke('auth:clearPersistedUser');
     }
   },
   installer: {

@@ -1,8 +1,8 @@
 import { useMemo, useState } from 'react';
 import { openCiamLogin } from '@services/authService';
-import { useLazyExchangeCodeQuery } from '@renderer/store/api/authApi';
+import { useLazyExchangeCodeQuery, useLazyGetUserInfoQuery } from '@renderer/store/api/authApi';
 import { useAppDispatch } from '@renderer/store/hooks';
-import { setAuthSession } from '@renderer/store/authSlice';
+import { setOnlineAuthSession } from '@renderer/store/authSlice';
 import { Button } from '@ui/components/ui/button';
 
 function toErrorMessage(error: unknown): string {
@@ -26,10 +26,11 @@ function toErrorMessage(error: unknown): string {
 export function LoginPage() {
   const dispatch = useAppDispatch();
   const [triggerExchangeCode, exchangeCodeState] = useLazyExchangeCodeQuery();
+  const [triggerUserInfo, userInfoState] = useLazyGetUserInfoQuery();
   const [isOpeningCiamWindow, setIsOpeningCiamWindow] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const isSubmitting = isOpeningCiamWindow || exchangeCodeState.isFetching;
+  const isSubmitting = isOpeningCiamWindow || exchangeCodeState.isFetching || userInfoState.isFetching;
 
   const actionLabel = useMemo(() => {
     if (isOpeningCiamWindow) {
@@ -40,8 +41,12 @@ export function LoginPage() {
       return 'Validating token...';
     }
 
+    if (userInfoState.isFetching) {
+      return 'Loading user profile...';
+    }
+
     return 'Login with CIAM';
-  }, [exchangeCodeState.isFetching, isOpeningCiamWindow]);
+  }, [exchangeCodeState.isFetching, isOpeningCiamWindow, userInfoState.isFetching]);
 
   const handleLogin = async (): Promise<void> => {
     setErrorMessage(null);
@@ -57,12 +62,15 @@ export function LoginPage() {
 
       const jwt = await triggerExchangeCode(ciamResult.exchangeKey).unwrap();
       console.info('[login] JWT successfully exchanged');
+      const profile = await triggerUserInfo(jwt).unwrap();
+      console.info('[login] User profile loaded', { email: profile.email });
 
       dispatch(
-        setAuthSession({
+        setOnlineAuthSession({
           jwt,
           refreshToken: ciamResult.refreshToken,
-          exchangeKey: ciamResult.exchangeKey
+          exchangeKey: ciamResult.exchangeKey,
+          user: profile
         })
       );
     } catch (error: unknown) {

@@ -5,6 +5,7 @@ import { registerAuthIpc } from './ipc/authIpc';
 import { registerInstallerIpc } from './ipc/installerIpc';
 import { createRuntimeConfigService } from './services/configService';
 import { loadDotEnvFromProjectRoot } from './services/envService';
+import { createUserService } from './services/userService';
 import { createInternalHttpServer } from './server/httpServer';
 
 const isDev = !app.isPackaged;
@@ -40,8 +41,9 @@ async function bootstrap(): Promise<void> {
 
   const appDatabase = await initializeDatabase(app.getPath('userData'));
   const configService = createRuntimeConfigService(appDatabase.connection);
+  const userService = createUserService(appDatabase.connection);
   registerInstallerIpc(configService);
-  registerAuthIpc(() => mainWindow);
+  registerAuthIpc(() => mainWindow, userService);
   const config = await configService.loadRuntimeConfig();
   const httpServer = createInternalHttpServer(config.apiPort);
 

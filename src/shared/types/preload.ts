@@ -1,12 +1,17 @@
 import type { AppMode } from './appMode';
 import type { CiamLoginResult } from './ipc/auth';
 import type { InstallerModeState } from './ipc/installer';
+import type { PersistedUserProfile, UserInfoApiModel } from './user';
 
 export interface BertAppApi {
   version: string;
   auth: {
     openCiamLogin(): Promise<CiamLoginResult>;
     exchangeCode(exchangeKey: string): Promise<string>;
+    getUserInfo(jwt: string): Promise<UserInfoApiModel[]>;
+    getPersistedUser(): Promise<PersistedUserProfile | null>;
+    savePersistedUser(user: PersistedUserProfile): Promise<void>;
+    clearPersistedUser(): Promise<void>;
   };
   installer: {
     getModeState(): Promise<InstallerModeState>;
