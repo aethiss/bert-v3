@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import type { AppMode } from '../shared/types/appMode';
 import type { InstallerModeState } from '../shared/types/ipc/installer';
+import type { PrintSettings } from '../shared/types/printConfig';
 import type { BertAppApi } from '../shared/types/preload';
 
 const bertAppApi: BertAppApi = {
@@ -33,6 +34,14 @@ const bertAppApi: BertAppApi = {
       return ipcRenderer.invoke('installer:setMode', mode) as Promise<InstallerModeState>;
     }
   },
+  config: {
+    getPrintSettings() {
+      return ipcRenderer.invoke('config:getPrintSettings') as Promise<PrintSettings>;
+    },
+    setPrintSettings(settings: PrintSettings) {
+      return ipcRenderer.invoke('config:setPrintSettings', settings) as Promise<PrintSettings>;
+    }
+  },
   eligibleData: {
     save(payload) {
       return ipcRenderer.invoke('eligibleData:save', payload);
@@ -48,6 +57,12 @@ const bertAppApi: BertAppApi = {
     },
     saveDistributionEvent(payload) {
       return ipcRenderer.invoke('eligibleData:saveDistributionEvent', payload);
+    },
+    getDistributionQueue() {
+      return ipcRenderer.invoke('eligibleData:getDistributionQueue');
+    },
+    clearDistributionQueue() {
+      return ipcRenderer.invoke('eligibleData:clearDistributionQueue');
     },
     hasData() {
       return ipcRenderer.invoke('eligibleData:hasData');

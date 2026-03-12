@@ -2,6 +2,7 @@ import { app, BrowserWindow } from 'electron';
 import path from 'node:path';
 import { initializeDatabase } from './database/database';
 import { registerAuthIpc } from './ipc/authIpc';
+import { registerConfigIpc } from './ipc/configIpc';
 import { registerEligibleDataIpc } from './ipc/eligibleDataIpc';
 import { registerInstallerIpc } from './ipc/installerIpc';
 import { createRuntimeConfigService } from './services/configService';
@@ -46,6 +47,7 @@ async function bootstrap(): Promise<void> {
   const userService = createUserService(appDatabase.connection);
   const eligibleDataService = createEligibleDataService(appDatabase.connection);
   registerInstallerIpc(configService);
+  registerConfigIpc(configService);
   registerAuthIpc(() => mainWindow, userService);
   registerEligibleDataIpc(eligibleDataService);
   const config = await configService.loadRuntimeConfig();

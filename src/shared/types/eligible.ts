@@ -140,3 +140,17 @@ export interface LocalDistributionEventInput {
   appSignature: string;
   notes: string | null;
 }
+
+export interface DistributionQueueItem {
+  id: number;
+  familyUniqueCode: number;
+  memberId: number;
+  cycleCode: number;
+  mainOperator: number;
+  mainOperatorFDP: string;
+  subOperator: string | null;
+  appSignature: string;
+  notes: string | null;
+  status: string;
+  createdAt: string;
+}

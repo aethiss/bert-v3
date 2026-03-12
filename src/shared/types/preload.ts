@@ -1,5 +1,6 @@
 import type { AppMode } from './appMode';
 import type {
+  DistributionQueueItem,
   DistributionDetailData,
   LocalDistributionEventInput,
   DistributionSearchResult,
@@ -8,6 +9,7 @@ import type {
 } from './eligible';
 import type { CiamLoginResult, ExchangeCodeResult } from './ipc/auth';
 import type { InstallerModeState } from './ipc/installer';
+import type { PrintSettings } from './printConfig';
 import type { PersistedUserProfile, UserInfoApiModel } from './user';
 
 export interface BertAppApi {
@@ -24,6 +26,10 @@ export interface BertAppApi {
     getModeState(): Promise<InstallerModeState>;
     setMode(mode: AppMode): Promise<InstallerModeState>;
   };
+  config: {
+    getPrintSettings(): Promise<PrintSettings>;
+    setPrintSettings(settings: PrintSettings): Promise<PrintSettings>;
+  };
   eligibleData: {
     save(payload: EligibleMembersApiResponse): Promise<EligibleOverviewSummary>;
     sync(params: { fdpCode: string; jwt: string }): Promise<EligibleOverviewSummary>;
@@ -34,6 +40,8 @@ export interface BertAppApi {
       familyHhId: string;
     }): Promise<DistributionDetailData | null>;
     saveDistributionEvent(payload: LocalDistributionEventInput): Promise<{ id: number }>;
+    getDistributionQueue(): Promise<DistributionQueueItem[]>;
+    clearDistributionQueue(): Promise<{ deleted: number }>;
     hasData(): Promise<boolean>;
     getOverviewSummary(): Promise<EligibleOverviewSummary>;
     clear(): Promise<void>;
