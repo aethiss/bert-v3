@@ -4,24 +4,8 @@ import { useLazyExchangeCodeQuery, useLazyGetUserInfoQuery } from '@renderer/sto
 import { useAppDispatch } from '@renderer/store/hooks';
 import { setOnlineAuthSession } from '@renderer/store/authSlice';
 import { Button } from '@ui/components/ui/button';
-
-function toErrorMessage(error: unknown): string {
-  if (error instanceof Error) {
-    return error.message;
-  }
-
-  if (typeof error === 'object' && error !== null) {
-    const maybeError = error as {
-      status?: number | string;
-      error?: string;
-      data?: unknown;
-    };
-    const details = maybeError.error || JSON.stringify(maybeError.data ?? {});
-    return `Login failed (${String(maybeError.status ?? 'unknown')}): ${details}`;
-  }
-
-  return 'Unable to complete login. Please try again.';
-}
+import { isRtkLikeError, toErrorMessage } from '@renderer/lib/errorMessage';
+import { showErrorToast } from '@renderer/lib/errorToast';
 
 export function LoginPage() {
   const dispatch = useAppDispatch();
@@ -60,7 +44,8 @@ export function LoginPage() {
         hasRefreshToken: Boolean(ciamResult.refreshToken)
       });
 
-      const jwt = await triggerExchangeCode(ciamResult.exchangeKey).unwrap();
+      const tokenResponse = await triggerExchangeCode(ciamResult.exchangeKey).unwrap();
+      const jwt = tokenResponse.idToken;
       console.info('[login] JWT successfully exchanged');
       const profile = await triggerUserInfo(jwt).unwrap();
       console.info('[login] User profile loaded', { email: profile.email });
@@ -68,14 +53,18 @@ export function LoginPage() {
       dispatch(
         setOnlineAuthSession({
           jwt,
-          refreshToken: ciamResult.refreshToken,
+          refreshToken: tokenResponse.refreshToken ?? ciamResult.refreshToken,
           exchangeKey: ciamResult.exchangeKey,
           user: profile
         })
       );
     } catch (error: unknown) {
       console.error('[login] Login flow failed', error);
-      setErrorMessage(toErrorMessage(error));
+      const message = toErrorMessage(error);
+      setErrorMessage(message);
+      if (!isRtkLikeError(error)) {
+        showErrorToast(message);
+      }
     } finally {
       setIsOpeningCiamWindow(false);
     }

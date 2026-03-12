@@ -1,5 +1,5 @@
 import type { AppMode } from './appMode';
-import type { CiamLoginResult } from './ipc/auth';
+import type { CiamLoginResult, ExchangeCodeResult } from './ipc/auth';
 import type { InstallerModeState } from './ipc/installer';
 import type { PersistedUserProfile, UserInfoApiModel } from './user';
 
@@ -7,7 +7,7 @@ export interface BertAppApi {
   version: string;
   auth: {
     openCiamLogin(): Promise<CiamLoginResult>;
-    exchangeCode(exchangeKey: string): Promise<string>;
+    exchangeCode(exchangeKey: string): Promise<ExchangeCodeResult>;
     getUserInfo(jwt: string): Promise<UserInfoApiModel[]>;
     getPersistedUser(): Promise<PersistedUserProfile | null>;
     savePersistedUser(user: PersistedUserProfile): Promise<void>;

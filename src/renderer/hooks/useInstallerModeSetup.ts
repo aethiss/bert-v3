@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { AppMode } from '@shared/types/appMode';
 import { getInstallerModeState, setInstallerMode } from '@services/installerService';
+import { showErrorToast } from '@renderer/lib/errorToast';
 
 interface InstallerModeSetupState {
   mode: AppMode | null;
@@ -30,7 +31,9 @@ export function useInstallerModeSetup(): InstallerModeSetupState {
         setIsLocked(state.isLocked);
       } catch {
         if (!isMounted) return;
-        setErrorMessage('Unable to load installer configuration.');
+        const message = 'Unable to load installer configuration.';
+        setErrorMessage(message);
+        showErrorToast(message);
       } finally {
         if (isMounted) {
           setIsLoading(false);
@@ -54,7 +57,9 @@ export function useInstallerModeSetup(): InstallerModeSetupState {
       setModeValue(state.mode);
       setIsLocked(state.isLocked);
     } catch {
-      setErrorMessage('Mode is already configured and cannot be changed.');
+      const message = 'Mode is already configured and cannot be changed.';
+      setErrorMessage(message);
+      showErrorToast(message);
     } finally {
       setIsSubmitting(false);
     }

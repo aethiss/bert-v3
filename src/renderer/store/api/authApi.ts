@@ -3,15 +3,7 @@ import type { RootState } from '@renderer/store';
 import { getApiBaseUrl } from './apiConfig';
 import { exchangeCode, getUserInfo, savePersistedUser } from '@services/authService';
 import type { PersistedUserProfile, UserInfoApiModel } from '@shared/types/user';
-
-function normalizeExchangeResponse(response: string): string {
-  const trimmed = response.trim();
-  if (trimmed.startsWith('"') && trimmed.endsWith('"')) {
-    return trimmed.slice(1, -1);
-  }
-
-  return trimmed;
-}
+import type { ExchangeCodeResult } from '@shared/types/ipc/auth';
 
 function toPersistedUserProfile(
   response: UserInfoApiModel[] | UserInfoApiModel
@@ -42,11 +34,11 @@ export const authApi = createApi({
     }
   }),
   endpoints: (build) => ({
-    exchangeCode: build.query<string, string>({
+    exchangeCode: build.query<ExchangeCodeResult, string>({
       async queryFn(exchangeKey) {
         try {
-          const jwt = await exchangeCode(exchangeKey);
-          return { data: normalizeExchangeResponse(jwt) };
+          const tokenResponse = await exchangeCode(exchangeKey);
+          return { data: tokenResponse };
         } catch (error) {
           const message = error instanceof Error ? error.message : 'Exchange code failed.';
           return {

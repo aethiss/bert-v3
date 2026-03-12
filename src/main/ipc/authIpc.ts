@@ -1,5 +1,5 @@
 import { BrowserWindow, ipcMain } from 'electron';
-import type { CiamLoginResult } from '../../shared/types/ipc/auth';
+import type { CiamLoginResult, ExchangeCodeResult } from '../../shared/types/ipc/auth';
 import type { PersistedUserProfile, UserInfoApiModel } from '../../shared/types/user';
 import type { UserService } from '../services/userService';
 
@@ -73,13 +73,42 @@ function resolveUserInfoUrl(): string {
   return new URL('/api/v1/userinfo/', apiBase).toString();
 }
 
-function normalizeExchangeResponse(response: string): string {
+function normalizeExchangeResponse(response: string): ExchangeCodeResult {
   const trimmed = response.trim();
-  if (trimmed.startsWith('"') && trimmed.endsWith('"')) {
-    return trimmed.slice(1, -1);
+  const unwrapped = trimmed.startsWith("'") && trimmed.endsWith("'") ? trimmed.slice(1, -1) : trimmed;
+
+  const parseNestedJson = (value: string): unknown => {
+    try {
+      const parsed = JSON.parse(value) as unknown;
+      if (typeof parsed === 'string') {
+        return JSON.parse(parsed) as unknown;
+      }
+      return parsed;
+    } catch {
+      return value;
+    }
+  };
+
+  const parsed = parseNestedJson(unwrapped);
+
+  if (typeof parsed === 'string') {
+    return {
+      idToken: parsed,
+      refreshToken: null
+    };
   }
 
-  return trimmed;
+  if (typeof parsed === 'object' && parsed !== null) {
+    const payload = parsed as { id_token?: unknown; refresh_token?: unknown };
+    if (typeof payload.id_token === 'string' && payload.id_token.length > 0) {
+      return {
+        idToken: payload.id_token,
+        refreshToken: typeof payload.refresh_token === 'string' ? payload.refresh_token : null
+      };
+    }
+  }
+
+  throw new Error('Exchange code response format is not valid.');
 }
 
 async function openCiamLoginWindow(
@@ -202,14 +231,17 @@ export function registerAuthIpc(
       throw new Error(`Exchange code failed (${response.status} ${response.statusText}).`);
     }
 
-    const jwt = normalizeExchangeResponse(rawBody);
-    if (!jwt) {
-      console.error('[auth] Exchange code returned empty body');
-      throw new Error('Exchange code returned an empty token.');
+    const tokenResponse = normalizeExchangeResponse(rawBody);
+    if (!tokenResponse.idToken) {
+      console.error('[auth] Exchange code returned empty id_token');
+      throw new Error('Exchange code returned an empty id_token.');
     }
 
-    console.info('[auth] JWT received', { jwt: maskToken(jwt) });
-    return jwt;
+    console.info('[auth] JWT received', {
+      jwt: maskToken(tokenResponse.idToken),
+      hasRefreshToken: Boolean(tokenResponse.refreshToken)
+    });
+    return tokenResponse;
   });
 
   ipcMain.handle(CHANNEL_GET_USER_INFO, async (_event, jwt: string) => {

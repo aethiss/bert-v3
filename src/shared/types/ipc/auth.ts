@@ -3,3 +3,8 @@ export interface CiamLoginResult {
   refreshToken: string | null;
   redirectUrl: string;
 }
+
+export interface ExchangeCodeResult {
+  idToken: string;
+  refreshToken: string | null;
+}

@@ -1,11 +1,11 @@
-import type { CiamLoginResult } from '@shared/types/ipc/auth';
+import type { CiamLoginResult, ExchangeCodeResult } from '@shared/types/ipc/auth';
 import type { PersistedUserProfile, UserInfoApiModel } from '@shared/types/user';
 
 export async function openCiamLogin(): Promise<CiamLoginResult> {
   return window.bertApp.auth.openCiamLogin();
 }
 
-export async function exchangeCode(exchangeKey: string): Promise<string> {
+export async function exchangeCode(exchangeKey: string): Promise<ExchangeCodeResult> {
   return window.bertApp.auth.exchangeCode(exchangeKey);
 }
 

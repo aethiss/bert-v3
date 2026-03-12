@@ -5,6 +5,7 @@ import { DashboardPage } from '@renderer/pages/DashboardPage';
 import { LoginPage } from '@renderer/pages/LoginPage';
 import { ServerPage } from '@renderer/pages/ServerPage';
 import type { ServerRouteState } from '@renderer/components/server/types';
+import type { ExchangeCodeResult } from '@shared/types/ipc/auth';
 import {
   parseAppHash,
   toAppHash,
@@ -27,6 +28,8 @@ import {
   selectIsAuthenticated,
   selectIsOnline
 } from '@renderer/store/selectors/authSelectors';
+import { showErrorToast } from '@renderer/lib/errorToast';
+import { isRtkLikeError, toErrorMessage } from '@renderer/lib/errorMessage';
 
 export function App() {
   const dispatch = useAppDispatch();
@@ -48,6 +51,8 @@ export function App() {
         }
 
         dispatch(restoreOfflineSession(persistedUser));
+      } catch (error) {
+        showErrorToast(error);
       } finally {
         if (mounted) {
           setIsHydratingAuth(false);
@@ -61,6 +66,24 @@ export function App() {
       mounted = false;
     };
   }, [dispatch]);
+
+  useEffect(() => {
+    const onWindowError = (event: ErrorEvent) => {
+      showErrorToast(event.error ?? event.message);
+    };
+
+    const onUnhandledRejection = (event: PromiseRejectionEvent) => {
+      showErrorToast(event.reason);
+    };
+
+    window.addEventListener('error', onWindowError);
+    window.addEventListener('unhandledrejection', onUnhandledRejection);
+
+    return () => {
+      window.removeEventListener('error', onWindowError);
+      window.removeEventListener('unhandledrejection', onUnhandledRejection);
+    };
+  }, []);
 
   useEffect(() => {
     const onHashChange = () => {
@@ -104,13 +127,14 @@ export function App() {
     const exchangeRequest = dispatch(
       authApi.endpoints.exchangeCode.initiate(ciamResult.exchangeKey, { forceRefetch: true })
     );
-    let jwt = '';
+    let tokenResponse: ExchangeCodeResult;
     try {
-      jwt = await exchangeRequest.unwrap();
+      tokenResponse = await exchangeRequest.unwrap();
     } finally {
       exchangeRequest.unsubscribe();
     }
 
+    const jwt = tokenResponse.idToken;
     const userInfoRequest = dispatch(authApi.endpoints.getUserInfo.initiate(jwt, { forceRefetch: true }));
     let profile;
     try {
@@ -122,7 +146,7 @@ export function App() {
     dispatch(
       setOnlineAuthSession({
         jwt,
-        refreshToken: ciamResult.refreshToken,
+        refreshToken: tokenResponse.refreshToken ?? ciamResult.refreshToken,
         exchangeKey: ciamResult.exchangeKey,
         user: profile
       })
@@ -140,6 +164,9 @@ export function App() {
       await runOnlineLoginFlow();
     } catch (error) {
       console.error('[auth] Unable to complete auth action from server navigation', error);
+      if (!isRtkLikeError(error)) {
+        showErrorToast(toErrorMessage(error));
+      }
     }
   }, [dispatch, isOnline, runOnlineLoginFlow]);
 
