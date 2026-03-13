@@ -14,6 +14,7 @@ import type {
   LocalServerSettings,
   LocalServerStatus
 } from './localServer';
+import type { OperationsDashboard, OperationsDashboardQuery } from './operations';
 import type { PrintSettings } from './printConfig';
 import type { PersistedUserProfile, UserInfoApiModel } from './user';
 
@@ -40,6 +41,7 @@ export interface BertAppApi {
     getLocalServerStatus(): Promise<LocalServerStatus>;
     startLocalServer(settings: LocalServerSettings): Promise<LocalServerStatus>;
     stopLocalServer(): Promise<LocalServerStatus>;
+    getOperationsDashboard(query: OperationsDashboardQuery): Promise<OperationsDashboard>;
   };
   eligibleData: {
     save(payload: EligibleMembersApiResponse): Promise<EligibleOverviewSummary>;

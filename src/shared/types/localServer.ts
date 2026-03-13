@@ -19,3 +19,9 @@ export interface LocalServerStatus {
   startedAt: string | null;
   activeClients: number;
 }
+
+export interface LocalServerClientPresence {
+  alias: string;
+  isConnected: boolean;
+  lastSeenAt: string | null;
+}

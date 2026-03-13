@@ -48,7 +48,7 @@ async function bootstrap(): Promise<void> {
   const eligibleDataService = createEligibleDataService(appDatabase.connection);
   const localApiServer = createLocalApiServer({ eligibleDataService });
   registerInstallerIpc(configService);
-  registerConfigIpc(configService, localApiServer);
+  registerConfigIpc(configService, localApiServer, eligibleDataService);
   registerAuthIpc(() => mainWindow, userService);
   registerEligibleDataIpc(eligibleDataService);
   await createMainWindow();

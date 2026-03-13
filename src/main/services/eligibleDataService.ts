@@ -13,6 +13,7 @@ import type {
   EligibleOverviewSummary,
   LocalDistributionEventInput
 } from '../../shared/types/eligible';
+import type { OperationsDashboardQuery } from '../../shared/types/operations';
 
 function asNumber(value: unknown, fallback = 0): number {
   return typeof value === 'number' && Number.isFinite(value) ? value : fallback;
@@ -109,6 +110,44 @@ export interface EligibleDataService {
   saveDistributionEvent(payload: LocalDistributionEventInput): Promise<{ id: number }>;
   saveClientDistribution(payload: ClientDistributionInput): Promise<{ id: number }>;
   getDistributionQueue(): Promise<DistributionQueueItem[]>;
+  getOperationsAggregates(
+    query: OperationsDashboardQuery,
+    sessionStartedAt: string | null
+  ): Promise<{
+    totalDistributions: number;
+    cycleProgress: Array<{
+      cycleCode: number;
+      cycleName: string;
+      totalHouseholds: number;
+      distributedCount: number;
+    }>;
+    overviewBars: Array<{
+      alias: string;
+      distributedCount: number;
+    }>;
+    clientCycleCounts: Array<{
+      alias: string;
+      cycleCode: number;
+      distributedCount: number;
+    }>;
+    distributions: {
+      items: Array<{
+        id: number;
+        subOperator: string;
+        memberId: number;
+        date: string;
+        time: string;
+        cycleCode: number;
+        cycleName: string;
+        status: string;
+        createdAt: string;
+      }>;
+      total: number;
+      page: number;
+      pageSize: number;
+      totalPages: number;
+    };
+  }>;
   clearDistributionQueue(): Promise<{ deleted: number }>;
   hasEligibleData(): Promise<boolean>;
   getOverviewSummary(): Promise<EligibleOverviewSummary>;
@@ -799,6 +838,238 @@ export function createEligibleDataService(db: Database): EligibleDataService {
     return (rows ?? []) as DistributionQueueItem[];
   }
 
+  async function getOperationsAggregates(
+    query: OperationsDashboardQuery,
+    sessionStartedAt: string | null
+  ): Promise<{
+    totalDistributions: number;
+    cycleProgress: Array<{
+      cycleCode: number;
+      cycleName: string;
+      totalHouseholds: number;
+      distributedCount: number;
+    }>;
+    overviewBars: Array<{
+      alias: string;
+      distributedCount: number;
+    }>;
+    clientCycleCounts: Array<{
+      alias: string;
+      cycleCode: number;
+      distributedCount: number;
+    }>;
+    distributions: {
+      items: Array<{
+        id: number;
+        subOperator: string;
+        memberId: number;
+        date: string;
+        time: string;
+        cycleCode: number;
+        cycleName: string;
+        status: string;
+        createdAt: string;
+      }>;
+      total: number;
+      page: number;
+      pageSize: number;
+      totalPages: number;
+    };
+  }> {
+    const safePage = Number.isInteger(query.page) && query.page > 0 ? query.page : 1;
+    const safePageSize =
+      Number.isInteger(query.pageSize) && query.pageSize > 0 ? Math.min(query.pageSize, 100) : 10;
+    const search = query.search.trim().toLowerCase();
+    const offset = (safePage - 1) * safePageSize;
+
+    const sessionStartedSql = sessionStartedAt
+      ? new Date(sessionStartedAt).toISOString().slice(0, 19).replace('T', ' ')
+      : null;
+    const hasSessionFilter = Boolean(sessionStartedSql);
+    const searchPattern = `%${search}%`;
+    const hasSearch = search.length > 0;
+
+    const filterClause =
+      hasSessionFilter && hasSearch
+        ? `WHERE dq.created_at >= ? AND (LOWER(COALESCE(dq.sub_operator, '')) LIKE ? OR CAST(dq.member_id AS TEXT) LIKE ?)`
+        : hasSessionFilter
+          ? `WHERE dq.created_at >= ?`
+          : hasSearch
+            ? `WHERE (LOWER(COALESCE(dq.sub_operator, '')) LIKE ? OR CAST(dq.member_id AS TEXT) LIKE ?)`
+            : '';
+
+    const params: unknown[] = [];
+    if (hasSessionFilter) {
+      params.push(sessionStartedSql);
+    }
+    if (hasSearch) {
+      params.push(searchPattern, searchPattern);
+    }
+
+    const totalRow = await db.get<{ count: number }>(
+      `
+      SELECT COUNT(*) as count
+      FROM distribution_queue dq
+      ${filterClause}
+      `,
+      ...params
+    );
+    const totalDistributions = asNumber(totalRow?.count);
+
+    const cycleRows = await db.all<
+      Array<{
+        cycleCode: number;
+        cycleName: string;
+        totalHouseholds: number;
+      }>
+    >(
+      `
+      SELECT
+        c.cycle_code as cycleCode,
+        c.cycle_name as cycleName,
+        c.household_count as totalHouseholds
+      FROM cycles c
+      ORDER BY c.cycle_code DESC
+      `
+    );
+
+    const cycleDistRows = await db.all<Array<{ cycleCode: number; distributedCount: number }>>(
+      `
+      SELECT
+        dq.cycle_code as cycleCode,
+        COUNT(*) as distributedCount
+      FROM distribution_queue dq
+      ${hasSessionFilter ? `WHERE dq.created_at >= ?` : ''}
+      GROUP BY dq.cycle_code
+      `,
+      ...(hasSessionFilter ? [sessionStartedSql] : [])
+    );
+    const distByCycle = new Map<number, number>();
+    for (const row of cycleDistRows ?? []) {
+      distByCycle.set(asNumber(row.cycleCode), asNumber(row.distributedCount));
+    }
+
+    const cycleProgress = (cycleRows ?? []).map((cycle) => ({
+      cycleCode: asNumber(cycle.cycleCode),
+      cycleName: asText(cycle.cycleName, `Cycle ${cycle.cycleCode}`),
+      totalHouseholds: asNumber(cycle.totalHouseholds),
+      distributedCount: asNumber(distByCycle.get(asNumber(cycle.cycleCode)))
+    }));
+
+    const overviewRows = await db.all<Array<{ alias: string; distributedCount: number }>>(
+      `
+      SELECT
+        COALESCE(NULLIF(TRIM(dq.sub_operator), ''), 'Unknown') as alias,
+        COUNT(*) as distributedCount
+      FROM distribution_queue dq
+      ${hasSessionFilter ? `WHERE dq.created_at >= ?` : ''}
+      GROUP BY alias
+      ORDER BY distributedCount DESC, alias ASC
+      `,
+      ...(hasSessionFilter ? [sessionStartedSql] : [])
+    );
+    const overviewBars = (overviewRows ?? []).map((row) => ({
+      alias: asText(row.alias, 'Unknown'),
+      distributedCount: asNumber(row.distributedCount)
+    }));
+
+    const clientCycleRows = await db.all<
+      Array<{ alias: string; cycleCode: number; distributedCount: number }>
+    >(
+      `
+      SELECT
+        COALESCE(NULLIF(TRIM(dq.sub_operator), ''), 'Unknown') as alias,
+        dq.cycle_code as cycleCode,
+        COUNT(*) as distributedCount
+      FROM distribution_queue dq
+      ${hasSessionFilter ? `WHERE dq.created_at >= ?` : ''}
+      GROUP BY alias, dq.cycle_code
+      ORDER BY alias ASC, dq.cycle_code DESC
+      `,
+      ...(hasSessionFilter ? [sessionStartedSql] : [])
+    );
+    const clientCycleCounts = (clientCycleRows ?? []).map((row) => ({
+      alias: asText(row.alias, 'Unknown'),
+      cycleCode: asNumber(row.cycleCode),
+      distributedCount: asNumber(row.distributedCount)
+    }));
+
+    const itemRows = await db.all<
+      Array<{
+        id: number;
+        subOperator: string | null;
+        memberId: number;
+        cycleCode: number;
+        cycleName: string | null;
+        status: string;
+        createdAt: string;
+      }>
+    >(
+      `
+      SELECT
+        dq.id as id,
+        dq.sub_operator as subOperator,
+        dq.member_id as memberId,
+        dq.cycle_code as cycleCode,
+        c.cycle_name as cycleName,
+        dq.status as status,
+        dq.created_at as createdAt
+      FROM distribution_queue dq
+      LEFT JOIN cycles c ON c.cycle_code = dq.cycle_code
+      ${filterClause}
+      ORDER BY dq.created_at DESC, dq.id DESC
+      LIMIT ? OFFSET ?
+      `,
+      ...params,
+      safePageSize,
+      offset
+    );
+
+    const items = (itemRows ?? []).map((row) => {
+      const created = new Date(asText(row.createdAt));
+      const date = Number.isNaN(created.getTime())
+        ? 'N/A'
+        : created.toLocaleDateString('en-GB', {
+            day: '2-digit',
+            month: '2-digit',
+            year: 'numeric'
+          });
+      const time = Number.isNaN(created.getTime())
+        ? 'N/A'
+        : created.toLocaleTimeString('en-GB', {
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: false
+          });
+
+      return {
+        id: asNumber(row.id),
+        subOperator: asText(row.subOperator, 'Unknown'),
+        memberId: asNumber(row.memberId),
+        date,
+        time,
+        cycleCode: asNumber(row.cycleCode),
+        cycleName: asText(row.cycleName, `Cycle ${row.cycleCode}`),
+        status: asText(row.status, 'pending_local'),
+        createdAt: asText(row.createdAt)
+      };
+    });
+
+    return {
+      totalDistributions,
+      cycleProgress,
+      overviewBars,
+      clientCycleCounts,
+      distributions: {
+        items,
+        total: totalDistributions,
+        page: safePage,
+        pageSize: safePageSize,
+        totalPages: Math.max(1, Math.ceil(totalDistributions / safePageSize))
+      }
+    };
+  }
+
   async function saveClientDistribution(
     payload: ClientDistributionInput
   ): Promise<{ id: number }> {
@@ -894,6 +1165,7 @@ export function createEligibleDataService(db: Database): EligibleDataService {
     saveDistributionEvent,
     saveClientDistribution,
     getDistributionQueue,
+    getOperationsAggregates,
     clearDistributionQueue,
     hasEligibleData,
     getOverviewSummary,

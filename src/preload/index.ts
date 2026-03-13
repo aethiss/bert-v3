@@ -66,6 +66,9 @@ const bertAppApi: BertAppApi = {
     },
     stopLocalServer() {
       return ipcRenderer.invoke('config:stopLocalServer') as Promise<LocalServerStatus>;
+    },
+    getOperationsDashboard(query) {
+      return ipcRenderer.invoke('config:getOperationsDashboard', query);
     }
   },
   eligibleData: {

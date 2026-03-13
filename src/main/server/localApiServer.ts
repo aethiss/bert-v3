@@ -1,10 +1,15 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import { randomBytes } from 'node:crypto';
 import type { ClientDistributionInput } from '../../shared/types/eligible';
-import type { LocalServerSettings, LocalServerStatus } from '../../shared/types/localServer';
+import type {
+  LocalServerClientPresence,
+  LocalServerSettings,
+  LocalServerStatus
+} from '../../shared/types/localServer';
 import type { EligibleDataService } from '../services/eligibleDataService';
 
 const ACCESS_TOKEN_TTL_MS = 1000 * 60 * 60 * 3;
+const CLIENT_DISCONNECT_TIMEOUT_MS = 1000 * 30;
 const API_VERSION = 'v1';
 
 interface SessionInfo {
@@ -21,6 +26,7 @@ export interface LocalApiServer {
   start(settings: LocalServerSettings): Promise<LocalServerStatus>;
   stop(): Promise<void>;
   getStatus(): LocalServerStatus;
+  getClientPresence(): LocalServerClientPresence[];
 }
 
 function sendJson(res: ServerResponse, statusCode: number, payload: unknown): void {
@@ -76,6 +82,36 @@ export function createLocalApiServer(deps: LocalApiServerDependencies): LocalApi
       startedAt: startedAt ? new Date(startedAt).toISOString() : null,
       activeClients: sessions.size
     };
+  }
+
+  function getClientPresence(): LocalServerClientPresence[] {
+    const now = Date.now();
+    const byAlias = new Map<string, { lastSeenAt: number; isConnected: boolean }>();
+
+    for (const session of sessions.values()) {
+      const existing = byAlias.get(session.alias);
+      const isConnected = now - session.lastSeenAt <= CLIENT_DISCONNECT_TIMEOUT_MS;
+      if (!existing) {
+        byAlias.set(session.alias, {
+          lastSeenAt: session.lastSeenAt,
+          isConnected
+        });
+        continue;
+      }
+
+      byAlias.set(session.alias, {
+        lastSeenAt: Math.max(existing.lastSeenAt, session.lastSeenAt),
+        isConnected: existing.isConnected || isConnected
+      });
+    }
+
+    return Array.from(byAlias.entries())
+      .map(([alias, value]) => ({
+        alias,
+        isConnected: value.isConnected,
+        lastSeenAt: new Date(value.lastSeenAt).toISOString()
+      }))
+      .sort((left, right) => left.alias.localeCompare(right.alias));
   }
 
   function getAuthorizedSession(req: IncomingMessage): SessionInfo | null {
@@ -264,6 +300,7 @@ export function createLocalApiServer(deps: LocalApiServerDependencies): LocalApi
         });
       });
     },
-    getStatus
+    getStatus,
+    getClientPresence
   };
 }

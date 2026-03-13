@@ -3,6 +3,7 @@ import type {
   LocalServerSettings,
   LocalServerStatus
 } from '@shared/types/localServer';
+import type { OperationsDashboard, OperationsDashboardQuery } from '@shared/types/operations';
 import type { PrintSettings } from '@shared/types/printConfig';
 
 export async function getPrintSettings(): Promise<PrintSettings> {
@@ -37,4 +38,10 @@ export async function startLocalServer(settings: LocalServerSettings): Promise<L
 
 export async function stopLocalServer(): Promise<LocalServerStatus> {
   return window.bertApp.config.stopLocalServer();
+}
+
+export async function getOperationsDashboard(
+  query: OperationsDashboardQuery
+): Promise<OperationsDashboard> {
+  return window.bertApp.config.getOperationsDashboard(query);
 }

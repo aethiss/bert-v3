@@ -45,3 +45,8 @@
 - [x] Salvataggio distribuzioni da client direttamente su DB server con regola `first write wins` (blocco duplicati famiglia+ciclo).
 - [x] Indicatore stato server in top navigation (`Server On/Off`) e indicatore `App Mode: SERVER/CLIENT` in tab `Configuration > Server`.
 - [x] Script CLI di test endpoint locali (`scripts/test_local_server_api.sh`) per health, login, search, distribution, ping e controlli unauthorized/duplicate.
+- [x] Dashboard `Operations` implementata per monitor sessione server live: overview per alias, stato client con timeout disconnessione 30s, lista distribuzioni paginata/search.
+- [x] Aggregazioni ottimizzate lato SQLite per `Operations` (query aggregate + `LIMIT/OFFSET`) e nuovi indici `distribution_queue` per carico multi-client.
+- [x] Indicatore realtime in UI con polling leggero e supporto test concorrenza tramite script `scripts/simulate_operations_3clients.sh`.
+- [x] Miglioramenti UX `Operations`: scroll verticale sull'intera sezione per viewport ridotti e semplificazione tabella distribuzioni (rimossa colonna status non rilevante).
+- [x] Badge `Data` in rosso con testo bianco per priorità visiva su sync verso server centrali.

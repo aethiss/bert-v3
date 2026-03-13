@@ -104,6 +104,18 @@ const MIGRATIONS: string[] = [
   `
   CREATE INDEX IF NOT EXISTS idx_distribution_queue_status_created
     ON distribution_queue(status, created_at);
+  `,
+  `
+  CREATE INDEX IF NOT EXISTS idx_distribution_queue_sub_operator
+    ON distribution_queue(sub_operator);
+  `,
+  `
+  CREATE INDEX IF NOT EXISTS idx_distribution_queue_member_id
+    ON distribution_queue(member_id);
+  `,
+  `
+  CREATE INDEX IF NOT EXISTS idx_distribution_queue_cycle_code
+    ON distribution_queue(cycle_code);
   `
 ];
 
