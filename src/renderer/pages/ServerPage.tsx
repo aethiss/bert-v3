@@ -20,6 +20,7 @@ interface ServerPageProps {
   pendingDistributionCount: number;
   userEmail: string;
   isOnline: boolean;
+  isLocalServerRunning: boolean;
   authActionLabel: 'Login' | 'Logout';
   onAuthAction: () => void;
 }
@@ -35,6 +36,7 @@ export function ServerPage({
   pendingDistributionCount,
   userEmail,
   isOnline,
+  isLocalServerRunning,
   authActionLabel,
   onAuthAction
 }: ServerPageProps) {
@@ -89,6 +91,7 @@ export function ServerPage({
           pendingDistributionCount={pendingDistributionCount}
           userEmail={userEmail}
           isOnline={isOnline}
+          isLocalServerRunning={isLocalServerRunning}
           authActionLabel={authActionLabel}
           onAuthAction={onAuthAction}
           onSelect={(section) => {

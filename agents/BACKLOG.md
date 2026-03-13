@@ -38,3 +38,10 @@
 - [x] Sezione `Data` implementata da mockup Figma: `Push Distribution` con conferma modale (simulazione push + clear locale) e `Export` CSV nativo delle distribuzioni locali.
 - [x] Estensione IPC/preload/service per gestione queue distribuzioni (`getDistributionQueue`, `clearDistributionQueue`) con aggiornamento badge pending in navigation.
 - [x] Correzioni visuali server: rimozione placeholder bianco anomalo in `Configuration`, background sezioni schiarito verso bianco e riduzione tipografia nella sezione `Data`.
+- [x] Implementazione servizio locale per modalità `SERVER` avviabile manualmente da UI (`Start/Stop Server`) senza auto-start al riavvio.
+- [x] Endpoint LAN locali implementati: `GET /health`, `POST /auth/login`, `GET /search`, `POST /distribution`, `GET /ping` con autenticazione bearer per endpoint protetti.
+- [x] Login client con `alias` + `oneTimePassword` (OTP) e session token locale temporaneo; validazione `subOperator` max 128 caratteri.
+- [x] Persistenza configurazione server in SQLite: interfaccia rete, `bindIp`, porta e OTP; esposizione lista interfacce/IP reali in `Configuration > Server`.
+- [x] Salvataggio distribuzioni da client direttamente su DB server con regola `first write wins` (blocco duplicati famiglia+ciclo).
+- [x] Indicatore stato server in top navigation (`Server On/Off`) e indicatore `App Mode: SERVER/CLIENT` in tab `Configuration > Server`.
+- [x] Script CLI di test endpoint locali (`scripts/test_local_server_api.sh`) per health, login, search, distribution, ping e controlli unauthorized/duplicate.

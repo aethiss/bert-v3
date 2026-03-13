@@ -1,16 +1,28 @@
-import { useEffect, useState } from 'react';
-import { Server as ServerIcon } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { Server as ServerIcon, Square as StopIcon } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@ui/components/ui/button';
 import { Input } from '@ui/components/ui/input';
 import { Select } from '@ui/components/ui/select';
 import { showErrorToast } from '@renderer/lib/errorToast';
-import { getPrintSettings, savePrintSettings } from '@renderer/services/configService';
+import { getInstallerModeState } from '@renderer/services/installerService';
+import {
+  getLocalServerSettings,
+  getLocalServerStatus,
+  getPrintSettings,
+  getServerInterfaces,
+  saveLocalServerSettings,
+  savePrintSettings,
+  startLocalServer,
+  stopLocalServer
+} from '@renderer/services/configService';
 import type {
   ConfigurationTab,
   ServerRouteState,
   ServerRouteComponentProps
 } from '@renderer/components/server/types';
+import type { AppMode } from '@shared/types/appMode';
+import type { LocalServerInterfaceInfo, LocalServerSettings } from '@shared/types/localServer';
 import type { PrintFormat } from '@shared/types/printConfig';
 
 function navigateToConfigurationTab(
@@ -25,11 +37,29 @@ function navigateToConfigurationTab(
   });
 }
 
+function toInterfaceOptionValue(networkInterface: LocalServerInterfaceInfo): string {
+  return `${networkInterface.name}::${networkInterface.address}`;
+}
+
 export function Configuration({ route, onNavigate }: ServerRouteComponentProps) {
   const [printFormat, setPrintFormat] = useState<PrintFormat>('A5');
   const [printDisabled, setPrintDisabled] = useState(false);
   const [isLoadingPrintSettings, setIsLoadingPrintSettings] = useState(false);
   const [isSavingPrintSettings, setIsSavingPrintSettings] = useState(false);
+
+  const [serverInterfaces, setServerInterfaces] = useState<LocalServerInterfaceInfo[]>([]);
+  const [serverSettings, setServerSettings] = useState<LocalServerSettings>({
+    interfaceName: '',
+    bindIp: '0.0.0.0',
+    port: 4860,
+    oneTimePassword: ''
+  });
+  const [isServerRunning, setIsServerRunning] = useState(false);
+  const [activeClientCount, setActiveClientCount] = useState(0);
+  const [isLoadingServerTab, setIsLoadingServerTab] = useState(false);
+  const [isSavingServerSettings, setIsSavingServerSettings] = useState(false);
+  const [isTogglingServer, setIsTogglingServer] = useState(false);
+  const [appMode, setAppMode] = useState<AppMode | null>(null);
 
   useEffect(() => {
     if (route.configurationTab !== 'printer') {
@@ -60,6 +90,74 @@ export function Configuration({ route, onNavigate }: ServerRouteComponentProps) 
     };
   }, [route.configurationTab]);
 
+  useEffect(() => {
+    if (route.configurationTab !== 'server') {
+      return;
+    }
+
+    let isMounted = true;
+    setIsLoadingServerTab(true);
+
+    void Promise.all([getServerInterfaces(), getLocalServerSettings(), getLocalServerStatus()])
+      .then(async ([interfaces, settings, status]) => {
+        if (!isMounted) {
+          return;
+        }
+
+        setServerInterfaces(interfaces);
+        setServerSettings((previous) => {
+          const preferred =
+            interfaces.find(
+              (item) =>
+                item.name === settings.interfaceName &&
+                item.address === settings.bindIp
+            ) ??
+            interfaces.find((item) => item.address === settings.bindIp) ??
+            interfaces.find((item) => !item.internal) ??
+            interfaces[0];
+
+          if (!preferred) {
+            return settings;
+          }
+
+          return {
+            ...settings,
+            interfaceName: preferred.name,
+            bindIp: preferred.address,
+            oneTimePassword: settings.oneTimePassword || previous.oneTimePassword
+          };
+        });
+
+        setIsServerRunning(status.running);
+        setActiveClientCount(status.activeClients);
+        const modeState = await getInstallerModeState();
+        if (isMounted) {
+          setAppMode(modeState.mode);
+        }
+      })
+      .catch((error) => {
+        showErrorToast(error);
+      })
+      .finally(() => {
+        if (isMounted) {
+          setIsLoadingServerTab(false);
+        }
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [route.configurationTab]);
+
+  const selectedInterfaceValue = useMemo(() => {
+    return toInterfaceOptionValue({
+      name: serverSettings.interfaceName,
+      address: serverSettings.bindIp,
+      family: 'IPv4',
+      internal: false
+    });
+  }, [serverSettings.bindIp, serverSettings.interfaceName]);
+
   const handleSavePrintSettings = async (): Promise<void> => {
     setIsSavingPrintSettings(true);
     try {
@@ -74,6 +172,56 @@ export function Configuration({ route, onNavigate }: ServerRouteComponentProps) 
       showErrorToast(error);
     } finally {
       setIsSavingPrintSettings(false);
+    }
+  };
+
+  const handleSaveServerSettings = async (): Promise<void> => {
+    setIsSavingServerSettings(true);
+    try {
+      const nextSettings = {
+        ...serverSettings,
+        oneTimePassword: serverSettings.oneTimePassword.trim()
+      };
+      const saved = await saveLocalServerSettings(nextSettings);
+      setServerSettings(saved);
+      toast.success('Saved', {
+        description: 'Server configuration updated.'
+      });
+    } catch (error) {
+      showErrorToast(error);
+    } finally {
+      setIsSavingServerSettings(false);
+    }
+  };
+
+  const handleToggleServer = async (): Promise<void> => {
+    setIsTogglingServer(true);
+    try {
+      if (isServerRunning) {
+        const status = await stopLocalServer();
+        setIsServerRunning(status.running);
+        setActiveClientCount(status.activeClients);
+        window.dispatchEvent(new Event('local-server-status-updated'));
+        toast.success('Stopped', {
+          description: 'Local server has been stopped.'
+        });
+        return;
+      }
+
+      const status = await startLocalServer({
+        ...serverSettings,
+        oneTimePassword: serverSettings.oneTimePassword.trim()
+      });
+      setIsServerRunning(status.running);
+      setActiveClientCount(status.activeClients);
+      window.dispatchEvent(new Event('local-server-status-updated'));
+      toast.success('Running', {
+        description: `Local server is listening on ${status.bindIp}:${status.port}.`
+      });
+    } catch (error) {
+      showErrorToast(error);
+    } finally {
+      setIsTogglingServer(false);
     }
   };
 
@@ -109,32 +257,106 @@ export function Configuration({ route, onNavigate }: ServerRouteComponentProps) 
           <div className="configuration-form">
             <label className="server-form-label">
               Interface
-              <Select className="server-form-control" defaultValue="wifi">
-                <option value="wifi">Wifi - 10.0.0.1</option>
+              <Select
+                className="server-form-control"
+                value={selectedInterfaceValue}
+                disabled={isLoadingServerTab || isSavingServerSettings || isTogglingServer}
+                onChange={(event) => {
+                  const [name, address] = event.target.value.split('::');
+                  setServerSettings((previous) => ({
+                    ...previous,
+                    interfaceName: name ?? previous.interfaceName,
+                    bindIp: address ?? previous.bindIp
+                  }));
+                }}
+              >
+                {serverInterfaces.map((networkInterface) => (
+                  <option
+                    key={toInterfaceOptionValue(networkInterface)}
+                    value={toInterfaceOptionValue(networkInterface)}
+                  >
+                    {networkInterface.name} - {networkInterface.address}
+                  </option>
+                ))}
               </Select>
             </label>
 
             <div className="server-form-display">
               <p className="server-form-label">IP Address</p>
-              <p className="server-form-muted">10.0.0.1</p>
+              <p className="server-form-muted">{serverSettings.bindIp || 'N/A'}</p>
             </div>
 
             <hr className="server-divider" />
 
             <label className="server-form-label">
               Port
-              <Input className="server-form-control" defaultValue="3000" />
+              <Input
+                className="server-form-control"
+                inputMode="numeric"
+                value={String(serverSettings.port)}
+                disabled={isLoadingServerTab || isSavingServerSettings || isTogglingServer}
+                onChange={(event) => {
+                  const digits = event.target.value.replace(/\D/g, '');
+                  setServerSettings((previous) => ({
+                    ...previous,
+                    port: digits ? Number(digits) : 0
+                  }));
+                }}
+              />
             </label>
 
             <label className="server-form-label">
-              Password
-              <Input className="server-form-control" defaultValue="Password" />
+              One Time Password
+              <Input
+                className="server-form-control"
+                value={serverSettings.oneTimePassword}
+                disabled={isLoadingServerTab || isSavingServerSettings || isTogglingServer}
+                onChange={(event) => {
+                  setServerSettings((previous) => ({
+                    ...previous,
+                    oneTimePassword: event.target.value
+                  }));
+                }}
+              />
             </label>
 
-            <Button className="server-btn server-start-btn">
-              <ServerIcon size={14} />
-              Start Server
-            </Button>
+            <p className="server-form-muted">
+              Status: {isServerRunning ? 'Running' : 'Stopped'} | Connected clients: {activeClientCount}
+            </p>
+            <p className="server-form-muted">App Mode: {appMode ?? 'N/A'}</p>
+
+            <div className="configuration-server-actions">
+              <Button
+                className="server-btn server-start-btn"
+                onClick={() => void handleSaveServerSettings()}
+                disabled={isLoadingServerTab || isSavingServerSettings || isTogglingServer}
+              >
+                {isSavingServerSettings ? 'Saving...' : 'Save'}
+              </Button>
+              <Button
+                className="server-btn server-start-btn"
+                onClick={() => void handleToggleServer()}
+                disabled={
+                  isLoadingServerTab ||
+                  isSavingServerSettings ||
+                  isTogglingServer ||
+                  (!isServerRunning &&
+                    (!serverSettings.bindIp || !serverSettings.port || !serverSettings.oneTimePassword.trim()))
+                }
+              >
+                {isServerRunning ? (
+                  <>
+                    <StopIcon size={14} />
+                    {isTogglingServer ? 'Stopping...' : 'Stop Server'}
+                  </>
+                ) : (
+                  <>
+                    <ServerIcon size={14} />
+                    {isTogglingServer ? 'Starting...' : 'Start Server'}
+                  </>
+                )}
+              </Button>
+            </div>
           </div>
         ) : null}
 

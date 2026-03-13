@@ -38,6 +38,7 @@ import {
 } from '@renderer/store/selectors/eligibleSelectors';
 import { showErrorToast } from '@renderer/lib/errorToast';
 import { isRtkLikeError, toErrorMessage } from '@renderer/lib/errorMessage';
+import { getLocalServerStatus } from '@renderer/services/configService';
 
 export function App() {
   const dispatch = useAppDispatch();
@@ -51,6 +52,7 @@ export function App() {
   const [route, setRoute] = useState<ParsedRoute>(() => parseAppHash(window.location.hash));
   const [isHydratingAuth, setIsHydratingAuth] = useState(true);
   const [isSynchronizing, setIsSynchronizing] = useState(false);
+  const [isLocalServerRunning, setIsLocalServerRunning] = useState(false);
 
   const refreshEligibleSummary = useCallback(async () => {
     const summary = await getEligibleOverviewSummary();
@@ -116,6 +118,23 @@ export function App() {
   }, [refreshEligibleSummary]);
 
   useEffect(() => {
+    if (!isAuthenticated || route.appRoute !== 'server') {
+      return;
+    }
+
+    const interval = window.setInterval(() => {
+      if (document.hidden) {
+        return;
+      }
+      void refreshEligibleSummary();
+    }, 3000);
+
+    return () => {
+      window.clearInterval(interval);
+    };
+  }, [isAuthenticated, refreshEligibleSummary, route.appRoute]);
+
+  useEffect(() => {
     const onHashChange = () => {
       setRoute(parseAppHash(window.location.hash));
     };
@@ -123,6 +142,28 @@ export function App() {
     window.addEventListener('hashchange', onHashChange);
     return () => {
       window.removeEventListener('hashchange', onHashChange);
+    };
+  }, []);
+
+  useEffect(() => {
+    const refreshLocalServerStatus = async () => {
+      try {
+        const status = await getLocalServerStatus();
+        setIsLocalServerRunning(status.running);
+      } catch {
+        setIsLocalServerRunning(false);
+      }
+    };
+
+    void refreshLocalServerStatus();
+
+    const onLocalServerStatusChanged = () => {
+      void refreshLocalServerStatus();
+    };
+
+    window.addEventListener('local-server-status-updated', onLocalServerStatusChanged);
+    return () => {
+      window.removeEventListener('local-server-status-updated', onLocalServerStatusChanged);
     };
   }, []);
 
@@ -272,6 +313,7 @@ export function App() {
         pendingDistributionCount={eligibleOverviewSummary.pendingDistributionCount}
         userEmail={currentUser?.email ?? ''}
         isOnline={isOnline}
+        isLocalServerRunning={isLocalServerRunning}
         authActionLabel={isOnline ? 'Logout' : 'Login'}
         onAuthAction={() => {
           void handleServerAuthAction();
@@ -286,6 +328,7 @@ export function App() {
     isAuthenticated,
     isHydratingAuth,
     isOnline,
+    isLocalServerRunning,
     isSynchronizing,
     navigateServer,
     route,

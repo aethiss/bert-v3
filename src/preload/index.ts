@@ -1,6 +1,11 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import type { AppMode } from '../shared/types/appMode';
 import type { InstallerModeState } from '../shared/types/ipc/installer';
+import type {
+  LocalServerInterfaceInfo,
+  LocalServerSettings,
+  LocalServerStatus
+} from '../shared/types/localServer';
 import type { PrintSettings } from '../shared/types/printConfig';
 import type { BertAppApi } from '../shared/types/preload';
 
@@ -40,6 +45,27 @@ const bertAppApi: BertAppApi = {
     },
     setPrintSettings(settings: PrintSettings) {
       return ipcRenderer.invoke('config:setPrintSettings', settings) as Promise<PrintSettings>;
+    },
+    getServerInterfaces() {
+      return ipcRenderer.invoke('config:getServerInterfaces') as Promise<LocalServerInterfaceInfo[]>;
+    },
+    getLocalServerSettings() {
+      return ipcRenderer.invoke('config:getLocalServerSettings') as Promise<LocalServerSettings>;
+    },
+    setLocalServerSettings(settings: LocalServerSettings) {
+      return ipcRenderer.invoke(
+        'config:setLocalServerSettings',
+        settings
+      ) as Promise<LocalServerSettings>;
+    },
+    getLocalServerStatus() {
+      return ipcRenderer.invoke('config:getLocalServerStatus') as Promise<LocalServerStatus>;
+    },
+    startLocalServer(settings: LocalServerSettings) {
+      return ipcRenderer.invoke('config:startLocalServer', settings) as Promise<LocalServerStatus>;
+    },
+    stopLocalServer() {
+      return ipcRenderer.invoke('config:stopLocalServer') as Promise<LocalServerStatus>;
     }
   },
   eligibleData: {

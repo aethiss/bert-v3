@@ -428,6 +428,14 @@ main {
   color: #16a34a;
 }
 
+.server-status.local-server-on svg {
+  color: #16a34a;
+}
+
+.server-status.local-server-off svg {
+  color: #9aa0aa;
+}
+
 .server-user-avatar {
   width: 34px;
   height: 34px;
@@ -1092,6 +1100,13 @@ main {
 .server-start-btn {
   margin-top: 12px;
   min-width: 146px;
+}
+
+.configuration-server-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
 .printing-disable-card {
