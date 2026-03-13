@@ -9,6 +9,11 @@ import type {
 } from './eligible';
 import type { CiamLoginResult, ExchangeCodeResult } from './ipc/auth';
 import type { InstallerModeState } from './ipc/installer';
+import type {
+  LocalServerInterfaceInfo,
+  LocalServerSettings,
+  LocalServerStatus
+} from './localServer';
 import type { PrintSettings } from './printConfig';
 import type { PersistedUserProfile, UserInfoApiModel } from './user';
 
@@ -29,6 +34,12 @@ export interface BertAppApi {
   config: {
     getPrintSettings(): Promise<PrintSettings>;
     setPrintSettings(settings: PrintSettings): Promise<PrintSettings>;
+    getServerInterfaces(): Promise<LocalServerInterfaceInfo[]>;
+    getLocalServerSettings(): Promise<LocalServerSettings>;
+    setLocalServerSettings(settings: LocalServerSettings): Promise<LocalServerSettings>;
+    getLocalServerStatus(): Promise<LocalServerStatus>;
+    startLocalServer(settings: LocalServerSettings): Promise<LocalServerStatus>;
+    stopLocalServer(): Promise<LocalServerStatus>;
   };
   eligibleData: {
     save(payload: EligibleMembersApiResponse): Promise<EligibleOverviewSummary>;

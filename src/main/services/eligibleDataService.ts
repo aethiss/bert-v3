@@ -1,5 +1,6 @@
 import type { Database } from 'sqlite';
 import type {
+  ClientDistributionInput,
   DistributionQueueItem,
   DistributionActiveCycle,
   DistributionDetailData,
@@ -106,6 +107,7 @@ export interface EligibleDataService {
     familyHhId: string;
   }): Promise<DistributionDetailData | null>;
   saveDistributionEvent(payload: LocalDistributionEventInput): Promise<{ id: number }>;
+  saveClientDistribution(payload: ClientDistributionInput): Promise<{ id: number }>;
   getDistributionQueue(): Promise<DistributionQueueItem[]>;
   clearDistributionQueue(): Promise<{ deleted: number }>;
   hasEligibleData(): Promise<boolean>;
@@ -797,6 +799,88 @@ export function createEligibleDataService(db: Database): EligibleDataService {
     return (rows ?? []) as DistributionQueueItem[];
   }
 
+  async function saveClientDistribution(
+    payload: ClientDistributionInput
+  ): Promise<{ id: number }> {
+    const subOperator = payload.subOperator.trim();
+    if (!subOperator || subOperator.length > 128) {
+      throw new Error('Invalid subOperator. It must be between 1 and 128 characters.');
+    }
+    if (!Number.isFinite(payload.memberId)) {
+      throw new Error('Invalid memberId for client distribution event.');
+    }
+    if (!Number.isFinite(payload.cycleCode)) {
+      throw new Error('Invalid cycleCode for client distribution event.');
+    }
+
+    const familyRow = await db.get<{ familyUniqueCode: number }>(
+      `
+      SELECT
+        f.family_unique_code as familyUniqueCode
+      FROM members m
+      INNER JOIN families f
+        ON f.hh_id = m.family_hh_id
+        AND f.cycle_code = m.cycle_code
+      WHERE m.member_id = ?
+        AND m.cycle_code = ?
+      LIMIT 1
+      `,
+      payload.memberId,
+      payload.cycleCode
+    );
+
+    const familyUniqueCode = asNullableNumber(familyRow?.familyUniqueCode);
+    if (familyUniqueCode === null) {
+      throw new Error('Member not found for the selected cycle.');
+    }
+
+    const duplicateRow = await db.get<{ count: number }>(
+      `
+      SELECT COUNT(*) as count
+      FROM distribution_queue
+      WHERE family_unique_code = ?
+        AND cycle_code = ?
+      `,
+      familyUniqueCode,
+      payload.cycleCode
+    );
+
+    if (asNumber(duplicateRow?.count) > 0) {
+      throw new Error(
+        'Duplicate distribution blocked: this family has already received distribution for the selected cycle.'
+      );
+    }
+
+    const result = await db.run(
+      `
+      INSERT INTO distribution_queue (
+        family_unique_code,
+        member_id,
+        cycle_code,
+        main_operator,
+        main_operator_fdp,
+        sub_operator,
+        app_signature,
+        notes,
+        status
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending_local')
+      `,
+      familyUniqueCode,
+      payload.memberId,
+      payload.cycleCode,
+      0,
+      'LOCAL_SERVER',
+      subOperator,
+      'LAN_CLIENT',
+      null
+    );
+
+    return {
+      id: asNumber(result.lastID)
+    };
+  }
+
   async function clearDistributionQueue(): Promise<{ deleted: number }> {
     const countRow = await db.get<{ count: number }>('SELECT COUNT(*) as count FROM distribution_queue');
     await db.run('DELETE FROM distribution_queue');
@@ -808,6 +892,7 @@ export function createEligibleDataService(db: Database): EligibleDataService {
     searchDistributionMember,
     getDistributionDetail,
     saveDistributionEvent,
+    saveClientDistribution,
     getDistributionQueue,
     clearDistributionQueue,
     hasEligibleData,

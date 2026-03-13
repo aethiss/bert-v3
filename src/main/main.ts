@@ -9,7 +9,7 @@ import { createRuntimeConfigService } from './services/configService';
 import { createEligibleDataService } from './services/eligibleDataService';
 import { loadDotEnvFromProjectRoot } from './services/envService';
 import { createUserService } from './services/userService';
-import { createInternalHttpServer } from './server/httpServer';
+import { createLocalApiServer } from './server/localApiServer';
 
 const isDev = !app.isPackaged;
 let mainWindow: BrowserWindow | null = null;
@@ -46,18 +46,15 @@ async function bootstrap(): Promise<void> {
   const configService = createRuntimeConfigService(appDatabase.connection);
   const userService = createUserService(appDatabase.connection);
   const eligibleDataService = createEligibleDataService(appDatabase.connection);
+  const localApiServer = createLocalApiServer({ eligibleDataService });
   registerInstallerIpc(configService);
-  registerConfigIpc(configService);
+  registerConfigIpc(configService, localApiServer);
   registerAuthIpc(() => mainWindow, userService);
   registerEligibleDataIpc(eligibleDataService);
-  const config = await configService.loadRuntimeConfig();
-  const httpServer = createInternalHttpServer(config.apiPort);
-
-  await httpServer.start();
   await createMainWindow();
 
   app.on('before-quit', () => {
-    void httpServer.stop();
+    void localApiServer.stop();
     void appDatabase.close();
   });
 }

@@ -9,8 +9,13 @@
 - [X] Creare gli endpoint API riguardanti la gestione dei membri e dei cicli, con la stessa logica che abbiamo implementato nella POC, ma adattata alla nuova struttura del progetto. Assicurarsi che gli endpoint siano ben strutturati e seguano le best practice per la scrittura del codice, e che siano testati con test di unità e di integrazione.
 - [X] Testare il funzionamento e la ricerca dei membri e dei cicli quando l'applicazione e' offline, e cioe' leggendo i dati dal database locale.
 - [X] Implementare la logica di distribuzione verso i membri delle famiglie, salvare i dati nel database locale.
-- [ ] Implementare la logica e configurazione della stampa delle ricevute di distribuzione, con layout personalizzabile
-- [ ] Implementare la logica di sincronizzazione dei dati tra il database locale e il server, assicurandosi che i dati vengano sincronizzati correttamente quando l'applicazione torna online.
+- [X] Implementare la logica e configurazione della stampa delle ricevute di distribuzione, con layout personalizzabile
+- [X] Implementare la logica di sincronizzazione dei dati tra il database locale e il server, assicurandosi che i dati vengano sincronizzati correttamente quando l'applicazione torna online.
+- [X] Implementare la sezione `Data` con la possibilità di esportare i dati delle distribuzioni in formato CSV, e di pushare i dati verso il server (simulazione push + clear locale).
+- [ ] Implementare il servizio Server. L'idea e' che l'applicazione configurata `Server` possa far partire un servizio locale (ad esempio con Express) che esponga degli endpoint alle applicazioni configurate `Client` nella stessa rete, in modo da permettere a queste ultime di sincronizzare i dati con il server locale, senza dover passare per il server centrale (questo e' un requisito importante per i clienti che hanno problemi di connettività, e che potrebbero avere piu' client che si connettono allo stesso server locale).
+- [ ] Testare il servizio Server con più client connessi, assicurandosi che la sincronizzazione dei dati funzioni correttamente e che i dati vengano gestiti in modo efficiente anche con più client connessi contemporaneamente.
+- [ ] Implementare la logica di gestione degli errori e dei casi limite, assicurandosi che l'applicazione sia robusta e che gestisca correttamente eventuali errori di rete, errori del server o errori dell'applicazione. Inserire un sistema di log giornaliero degli errori, in modo da poter analizzare eventuali problemi che si presentano in produzione. Poter salvare i file di log localmente, e poterli esportare in caso di necessità.
+- [ ] Aggiungere la funzionalita' del multilingua, in modo da permettere agli utenti di scegliere la lingua dell'applicazione, e assicurarsi che tutte le stringhe dell'applicazione siano tradotte correttamente. Le lingue supportate inizialmente sono inglese ed arabo. In caso di supporto di lingue RTL (Right-to-Left) come l'arabo, assicurarsi che il layout dell'applicazione si adatti correttamente e che l'esperienza utente sia ottimale.
 
 TODO: I Prossimi task saranno definiti in base alla progressione dello sviluppo, e saranno aggiunti a questa lista.
 

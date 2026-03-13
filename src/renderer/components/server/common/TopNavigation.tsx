@@ -1,4 +1,4 @@
-import { Printer, Unplug } from 'lucide-react';
+import { Printer, Server as ServerIcon, Unplug } from 'lucide-react';
 import type { ServerSection } from '@renderer/components/server/types';
 import { Button } from '@ui/components/ui/button';
 
@@ -15,6 +15,7 @@ interface TopNavigationProps {
   onSelect: (section: ServerSection) => void;
   userEmail: string;
   isOnline: boolean;
+  isLocalServerRunning: boolean;
   authActionLabel: 'Login' | 'Logout';
   onAuthAction: () => void;
 }
@@ -27,6 +28,7 @@ export function TopNavigation({
   onSelect,
   userEmail,
   isOnline,
+  isLocalServerRunning,
   authActionLabel,
   onAuthAction
 }: TopNavigationProps) {
@@ -78,6 +80,10 @@ export function TopNavigation({
         <div className={isOnline ? 'server-status online' : 'server-status offline'}>
           <Unplug size={14} />
           <span>{isOnline ? 'Online' : 'Offline'}</span>
+        </div>
+        <div className={isLocalServerRunning ? 'server-status local-server-on' : 'server-status local-server-off'}>
+          <ServerIcon size={14} />
+          <span>{isLocalServerRunning ? 'Server On' : 'Server Off'}</span>
         </div>
         <img
           className="server-user-avatar"

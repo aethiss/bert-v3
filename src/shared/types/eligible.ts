@@ -154,3 +154,9 @@ export interface DistributionQueueItem {
   status: string;
   createdAt: string;
 }
+
+export interface ClientDistributionInput {
+  subOperator: string;
+  cycleCode: number;
+  memberId: number;
+}
