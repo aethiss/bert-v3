@@ -160,3 +160,40 @@ export interface ClientDistributionInput {
   cycleCode: number;
   memberId: number;
 }
+
+export interface ClientDistributionHistoryInput {
+  alias: string;
+  host: string;
+  memberId: number;
+  familyUniqueCode: number;
+  cycleCode: number;
+  cycleName: string;
+  collectedBy: string;
+}
+
+export interface ClientDistributionHistoryItem {
+  id: number;
+  alias: string;
+  host: string;
+  memberId: number;
+  familyUniqueCode: number;
+  cycleCode: number;
+  cycleName: string;
+  collectedBy: string;
+  createdAt: string;
+}
+
+export interface ClientDistributionHistoryQuery {
+  alias: string;
+  search: string;
+  page: number;
+  pageSize: number;
+}
+
+export interface ClientDistributionHistoryResult {
+  items: ClientDistributionHistoryItem[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+}

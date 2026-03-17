@@ -1,6 +1,10 @@
 import type { Database } from 'sqlite';
 import type {
   ClientDistributionInput,
+  ClientDistributionHistoryInput,
+  ClientDistributionHistoryItem,
+  ClientDistributionHistoryQuery,
+  ClientDistributionHistoryResult,
   DistributionQueueItem,
   DistributionActiveCycle,
   DistributionDetailData,
@@ -73,6 +77,20 @@ function toDisplayName(firstName: string | null, lastName: string | null): strin
   return joined || 'N/A';
 }
 
+export function normalizeClientHistoryPagination(page: number, pageSize: number): {
+  page: number;
+  pageSize: number;
+  offset: number;
+} {
+  const safePage = Number.isInteger(page) && page > 0 ? page : 1;
+  const safePageSize = Number.isInteger(pageSize) && pageSize > 0 ? Math.min(pageSize, 100) : 10;
+  return {
+    page: safePage,
+    pageSize: safePageSize,
+    offset: (safePage - 1) * safePageSize
+  };
+}
+
 export function buildOverviewSummaryFromPayload(
   payload: EligibleMembersApiResponse,
   totalMembers: number
@@ -109,11 +127,12 @@ export interface EligibleDataService {
   }): Promise<DistributionDetailData | null>;
   saveDistributionEvent(payload: LocalDistributionEventInput): Promise<{ id: number }>;
   saveClientDistribution(payload: ClientDistributionInput): Promise<{ id: number }>;
+  saveClientDistributionHistory(payload: ClientDistributionHistoryInput): Promise<{ id: number }>;
+  getClientDistributionHistory(
+    query: ClientDistributionHistoryQuery
+  ): Promise<ClientDistributionHistoryResult>;
   getDistributionQueue(): Promise<DistributionQueueItem[]>;
-  getOperationsAggregates(
-    query: OperationsDashboardQuery,
-    sessionStartedAt: string | null
-  ): Promise<{
+  getOperationsAggregates(query: OperationsDashboardQuery): Promise<{
     totalDistributions: number;
     cycleProgress: Array<{
       cycleCode: number;
@@ -219,6 +238,35 @@ export function pickPreferredDistributionMember(
 }
 
 export function createEligibleDataService(db: Database): EligibleDataService {
+  async function getServerOperatorContext(): Promise<{ mainOperator: number; mainOperatorFDP: string }> {
+    const row = await db.get<{ userId: number | null; fdp: string | null }>(
+      `
+      SELECT
+        user_id as userId,
+        fdp as fdp
+      FROM "user"
+      WHERE id = 1
+      LIMIT 1
+      `
+    );
+
+    const mainOperator = asNullableNumber(row?.userId);
+    const mainOperatorFDP = asText(row?.fdp).trim();
+
+    if (mainOperator === null) {
+      throw new Error('Missing server main operator. Login on server before accepting client distributions.');
+    }
+
+    if (!mainOperatorFDP) {
+      throw new Error('Missing server FDP. Login on server before accepting client distributions.');
+    }
+
+    return {
+      mainOperator,
+      mainOperatorFDP
+    };
+  }
+
   async function clearEligibleData(): Promise<void> {
     await db.exec('BEGIN TRANSACTION');
     try {
@@ -839,8 +887,7 @@ export function createEligibleDataService(db: Database): EligibleDataService {
   }
 
   async function getOperationsAggregates(
-    query: OperationsDashboardQuery,
-    sessionStartedAt: string | null
+    query: OperationsDashboardQuery
   ): Promise<{
     totalDistributions: number;
     cycleProgress: Array<{
@@ -876,32 +923,22 @@ export function createEligibleDataService(db: Database): EligibleDataService {
       totalPages: number;
     };
   }> {
-    const safePage = Number.isInteger(query.page) && query.page > 0 ? query.page : 1;
-    const safePageSize =
-      Number.isInteger(query.pageSize) && query.pageSize > 0 ? Math.min(query.pageSize, 100) : 10;
+    const pagination = normalizeClientHistoryPagination(query.page, query.pageSize);
+    const safePage = pagination.page;
+    const safePageSize = pagination.pageSize;
     const search = query.search.trim().toLowerCase();
-    const offset = (safePage - 1) * safePageSize;
+    const offset = pagination.offset;
 
-    const sessionStartedSql = sessionStartedAt
-      ? new Date(sessionStartedAt).toISOString().slice(0, 19).replace('T', ' ')
-      : null;
-    const hasSessionFilter = Boolean(sessionStartedSql);
     const searchPattern = `%${search}%`;
     const hasSearch = search.length > 0;
 
+    const clientOnlyClause = `TRIM(COALESCE(dq.sub_operator, '')) <> ''`;
     const filterClause =
-      hasSessionFilter && hasSearch
-        ? `WHERE dq.created_at >= ? AND (LOWER(COALESCE(dq.sub_operator, '')) LIKE ? OR CAST(dq.member_id AS TEXT) LIKE ?)`
-        : hasSessionFilter
-          ? `WHERE dq.created_at >= ?`
-          : hasSearch
-            ? `WHERE (LOWER(COALESCE(dq.sub_operator, '')) LIKE ? OR CAST(dq.member_id AS TEXT) LIKE ?)`
-            : '';
+      hasSearch
+        ? `WHERE ${clientOnlyClause} AND (LOWER(COALESCE(dq.sub_operator, '')) LIKE ? OR CAST(dq.member_id AS TEXT) LIKE ?)`
+        : `WHERE ${clientOnlyClause}`;
 
     const params: unknown[] = [];
-    if (hasSessionFilter) {
-      params.push(sessionStartedSql);
-    }
     if (hasSearch) {
       params.push(searchPattern, searchPattern);
     }
@@ -939,10 +976,9 @@ export function createEligibleDataService(db: Database): EligibleDataService {
         dq.cycle_code as cycleCode,
         COUNT(*) as distributedCount
       FROM distribution_queue dq
-      ${hasSessionFilter ? `WHERE dq.created_at >= ?` : ''}
+      WHERE TRIM(COALESCE(dq.sub_operator, '')) <> ''
       GROUP BY dq.cycle_code
-      `,
-      ...(hasSessionFilter ? [sessionStartedSql] : [])
+      `
     );
     const distByCycle = new Map<number, number>();
     for (const row of cycleDistRows ?? []) {
@@ -962,11 +998,10 @@ export function createEligibleDataService(db: Database): EligibleDataService {
         COALESCE(NULLIF(TRIM(dq.sub_operator), ''), 'Unknown') as alias,
         COUNT(*) as distributedCount
       FROM distribution_queue dq
-      ${hasSessionFilter ? `WHERE dq.created_at >= ?` : ''}
+      WHERE TRIM(COALESCE(dq.sub_operator, '')) <> ''
       GROUP BY alias
       ORDER BY distributedCount DESC, alias ASC
-      `,
-      ...(hasSessionFilter ? [sessionStartedSql] : [])
+      `
     );
     const overviewBars = (overviewRows ?? []).map((row) => ({
       alias: asText(row.alias, 'Unknown'),
@@ -982,11 +1017,10 @@ export function createEligibleDataService(db: Database): EligibleDataService {
         dq.cycle_code as cycleCode,
         COUNT(*) as distributedCount
       FROM distribution_queue dq
-      ${hasSessionFilter ? `WHERE dq.created_at >= ?` : ''}
+      WHERE TRIM(COALESCE(dq.sub_operator, '')) <> ''
       GROUP BY alias, dq.cycle_code
       ORDER BY alias ASC, dq.cycle_code DESC
-      `,
-      ...(hasSessionFilter ? [sessionStartedSql] : [])
+      `
     );
     const clientCycleCounts = (clientCycleRows ?? []).map((row) => ({
       alias: asText(row.alias, 'Unknown'),
@@ -1122,6 +1156,8 @@ export function createEligibleDataService(db: Database): EligibleDataService {
       );
     }
 
+    const serverOperator = await getServerOperatorContext();
+
     const result = await db.run(
       `
       INSERT INTO distribution_queue (
@@ -1140,8 +1176,8 @@ export function createEligibleDataService(db: Database): EligibleDataService {
       familyUniqueCode,
       payload.memberId,
       payload.cycleCode,
-      0,
-      'LOCAL_SERVER',
+      serverOperator.mainOperator,
+      serverOperator.mainOperatorFDP,
       subOperator,
       'LAN_CLIENT',
       null
@@ -1149,6 +1185,145 @@ export function createEligibleDataService(db: Database): EligibleDataService {
 
     return {
       id: asNumber(result.lastID)
+    };
+  }
+
+  async function saveClientDistributionHistory(
+    payload: ClientDistributionHistoryInput
+  ): Promise<{ id: number }> {
+    const alias = payload.alias.trim();
+    if (!alias || alias.length > 128) {
+      throw new Error('Invalid alias for client distribution history.');
+    }
+
+    const host = payload.host.trim();
+    if (!host) {
+      throw new Error('Missing host for client distribution history.');
+    }
+
+    if (!Number.isFinite(payload.memberId) || !Number.isFinite(payload.familyUniqueCode)) {
+      throw new Error('Invalid member or family identifier for client distribution history.');
+    }
+    if (!Number.isFinite(payload.cycleCode)) {
+      throw new Error('Invalid cycle code for client distribution history.');
+    }
+
+    const cycleName = payload.cycleName.trim() || `Cycle ${payload.cycleCode}`;
+    const collectedBy = payload.collectedBy.trim() || 'N/A';
+
+    const result = await db.run(
+      `
+      INSERT INTO client_distribution_history (
+        alias,
+        host,
+        member_id,
+        family_unique_code,
+        cycle_code,
+        cycle_name,
+        collected_by
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+      `,
+      alias,
+      host,
+      payload.memberId,
+      payload.familyUniqueCode,
+      payload.cycleCode,
+      cycleName,
+      collectedBy
+    );
+
+    return {
+      id: asNumber(result.lastID)
+    };
+  }
+
+  async function getClientDistributionHistory(
+    query: ClientDistributionHistoryQuery
+  ): Promise<ClientDistributionHistoryResult> {
+    const alias = query.alias.trim();
+    if (!alias) {
+      return {
+        items: [],
+        total: 0,
+        page: 1,
+        pageSize: 10,
+        totalPages: 1
+      };
+    }
+
+    const pagination = normalizeClientHistoryPagination(query.page, query.pageSize);
+    const safePage = pagination.page;
+    const safePageSize = pagination.pageSize;
+    const search = query.search.trim().toLowerCase();
+    const offset = pagination.offset;
+    const hasSearch = search.length > 0;
+    const searchPattern = `%${search}%`;
+
+    const totalRow = await db.get<{ count: number }>(
+      `
+      SELECT COUNT(*) as count
+      FROM client_distribution_history
+      WHERE alias = ?
+      ${hasSearch ? 'AND (CAST(member_id AS TEXT) LIKE ? OR LOWER(cycle_name) LIKE ? OR LOWER(collected_by) LIKE ?)' : ''}
+      `,
+      ...(hasSearch ? [alias, searchPattern, searchPattern, searchPattern] : [alias])
+    );
+    const total = asNumber(totalRow?.count);
+
+    const rows = await db.all<
+      Array<{
+        id: number;
+        alias: string;
+        host: string;
+        memberId: number;
+        familyUniqueCode: number;
+        cycleCode: number;
+        cycleName: string;
+        collectedBy: string;
+        createdAt: string;
+      }>
+    >(
+      `
+      SELECT
+        id as id,
+        alias as alias,
+        host as host,
+        member_id as memberId,
+        family_unique_code as familyUniqueCode,
+        cycle_code as cycleCode,
+        cycle_name as cycleName,
+        collected_by as collectedBy,
+        created_at as createdAt
+      FROM client_distribution_history
+      WHERE alias = ?
+      ${hasSearch ? 'AND (CAST(member_id AS TEXT) LIKE ? OR LOWER(cycle_name) LIKE ? OR LOWER(collected_by) LIKE ?)' : ''}
+      ORDER BY created_at DESC, id DESC
+      LIMIT ? OFFSET ?
+      `,
+      ...(hasSearch
+        ? [alias, searchPattern, searchPattern, searchPattern, safePageSize, offset]
+        : [alias, safePageSize, offset])
+    );
+
+    const items: ClientDistributionHistoryItem[] = (rows ?? []).map((row) => ({
+      id: asNumber(row.id),
+      alias: asText(row.alias),
+      host: asText(row.host),
+      memberId: asNumber(row.memberId),
+      familyUniqueCode: asNumber(row.familyUniqueCode),
+      cycleCode: asNumber(row.cycleCode),
+      cycleName: asText(row.cycleName),
+      collectedBy: asText(row.collectedBy),
+      createdAt: asText(row.createdAt)
+    }));
+
+    return {
+      items,
+      total,
+      page: safePage,
+      pageSize: safePageSize,
+      totalPages: Math.max(1, Math.ceil(total / safePageSize))
     };
   }
 
@@ -1164,6 +1339,8 @@ export function createEligibleDataService(db: Database): EligibleDataService {
     getDistributionDetail,
     saveDistributionEvent,
     saveClientDistribution,
+    saveClientDistributionHistory,
+    getClientDistributionHistory,
     getDistributionQueue,
     getOperationsAggregates,
     clearDistributionQueue,

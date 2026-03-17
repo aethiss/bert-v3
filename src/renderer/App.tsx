@@ -4,6 +4,7 @@ import { InstallerModeModal } from '@ui/components/installer/InstallerModeModal'
 import { DashboardPage } from '@renderer/pages/DashboardPage';
 import { LoginPage } from '@renderer/pages/LoginPage';
 import { ServerPage } from '@renderer/pages/ServerPage';
+import { ClientPage } from '@renderer/pages/ClientPage';
 import type { ServerRouteState } from '@renderer/components/server/types';
 import type { ExchangeCodeResult } from '@shared/types/ipc/auth';
 import {
@@ -168,14 +169,28 @@ export function App() {
   }, []);
 
   useEffect(() => {
-    if (!isAuthenticated) {
+    if (installerModeSetup.isLoading || !installerModeSetup.mode) {
       return;
     }
 
-    if (!window.location.hash) {
+    const isClientMode = installerModeSetup.mode === 'CLIENT';
+    const hasHash = Boolean(window.location.hash);
+    const parsed = parseAppHash(window.location.hash);
+
+    if (!hasHash) {
+      window.location.hash = isClientMode ? '#/client/overview' : '#/server/overview';
+      return;
+    }
+
+    if (isClientMode && parsed.appRoute !== 'client') {
+      window.location.hash = '#/client/overview';
+      return;
+    }
+
+    if (!isClientMode && parsed.appRoute !== 'server') {
       window.location.hash = '#/server/overview';
     }
-  }, [isAuthenticated, installerModeSetup.mode]);
+  }, [installerModeSetup.isLoading, installerModeSetup.mode]);
 
   useEffect(() => {
     if (!isAuthenticated || route.appRoute !== 'server') {
@@ -190,7 +205,8 @@ export function App() {
   const navigateServer = useCallback((nextServerRoute: ServerRouteState) => {
     const next = {
       appRoute: 'server' as const,
-      server: nextServerRoute
+      server: nextServerRoute,
+      client: route.client
     };
 
     const nextHash = toAppHash(next);
@@ -200,7 +216,7 @@ export function App() {
     }
 
     setRoute(next);
-  }, []);
+  }, [route.client]);
 
   const runOnlineLoginFlow = useCallback(async () => {
     const ciamResult = await openCiamLogin();
@@ -279,8 +295,30 @@ export function App() {
   }, [dispatch, isOnline, runOnlineLoginFlow]);
 
   const appContent = useMemo(() => {
-    if (isHydratingAuth) {
+    if (isHydratingAuth || installerModeSetup.isLoading) {
       return null;
+    }
+
+    if (installerModeSetup.mode === 'CLIENT') {
+      if (route.appRoute !== 'client') {
+        return <DashboardPage />;
+      }
+
+      return <ClientPage route={route.client} onNavigate={(nextRoute) => {
+        const next = {
+          appRoute: 'client' as const,
+          server: route.server,
+          client: nextRoute
+        };
+
+        const nextHash = toAppHash(next);
+        if (window.location.hash !== nextHash) {
+          window.location.hash = nextHash;
+          return;
+        }
+
+        setRoute(next);
+      }} />;
     }
 
     if (!isAuthenticated) {
@@ -323,12 +361,14 @@ export function App() {
   }, [
     currentUser?.email,
     eligibleOverviewSummary,
-    hasEligibleData,
     handleServerAuthAction,
+    hasEligibleData,
+    installerModeSetup.isLoading,
+    installerModeSetup.mode,
     isAuthenticated,
     isHydratingAuth,
-    isOnline,
     isLocalServerRunning,
+    isOnline,
     isSynchronizing,
     navigateServer,
     route,

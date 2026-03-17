@@ -39,7 +39,6 @@ export interface OperationDistributionRow {
 
 export interface OperationsDashboard {
   serverRunning: boolean;
-  sessionStartedAt: string | null;
   totalDistributions: number;
   totalEligibleHouseholds: number;
   cycleProgress: OperationCycleProgress[];

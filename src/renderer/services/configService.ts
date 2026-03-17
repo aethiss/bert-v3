@@ -1,4 +1,5 @@
 import type {
+  ClientConnectionSettings,
   LocalServerInterfaceInfo,
   LocalServerSettings,
   LocalServerStatus
@@ -44,4 +45,18 @@ export async function getOperationsDashboard(
   query: OperationsDashboardQuery
 ): Promise<OperationsDashboard> {
   return window.bertApp.config.getOperationsDashboard(query);
+}
+
+export async function getClientConnectionSettings(): Promise<ClientConnectionSettings> {
+  return window.bertApp.config.getClientConnectionSettings();
+}
+
+export async function saveClientConnectionSettings(
+  settings: ClientConnectionSettings
+): Promise<ClientConnectionSettings> {
+  return window.bertApp.config.setClientConnectionSettings(settings);
+}
+
+export async function resetDatabaseForDevelopment(): Promise<void> {
+  return window.bertApp.config.resetDatabaseForDevelopment();
 }

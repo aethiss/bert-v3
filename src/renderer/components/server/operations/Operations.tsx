@@ -8,7 +8,6 @@ import type { OperationsDashboard } from '@shared/types/operations';
 
 const DEFAULT_DASHBOARD: OperationsDashboard = {
   serverRunning: false,
-  sessionStartedAt: null,
   totalDistributions: 0,
   totalEligibleHouseholds: 0,
   cycleProgress: [],
@@ -79,7 +78,7 @@ export function Operations() {
         <article className="operations-card">
           <h2>Overview</h2>
           {dashboard.overviewBars.length === 0 ? (
-            <p className="operations-muted">No distributions yet in current session.</p>
+            <p className="operations-muted">No client distributions pending push.</p>
           ) : (
             <div className="operations-bars">
               {dashboard.overviewBars.map((item) => {
@@ -89,18 +88,20 @@ export function Operations() {
                 );
                 return (
                   <div key={item.alias} className="operations-bar-row">
-                    <span>{item.alias}</span>
+                    <span className="operations-bar-label" title={item.alias}>
+                      {item.alias}
+                    </span>
                     <div className="operations-bar-track">
                       <div className="operations-bar-fill" style={{ width: `${width}%` }} />
                     </div>
-                    <strong>{item.distributedCount}</strong>
+                    <strong className="operations-bar-value">{item.distributedCount}</strong>
                   </div>
                 );
               })}
             </div>
           )}
           <p className="operations-muted">
-            Session distributions: {dashboard.totalDistributions} / Eligible households:{' '}
+            Pending client distributions: {dashboard.totalDistributions} / Eligible households:{' '}
             {dashboard.totalEligibleHouseholds}
           </p>
         </article>

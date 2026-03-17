@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Server as ServerIcon, Square as StopIcon } from 'lucide-react';
 import { toast } from 'sonner';
-import { Button } from '@ui/components/ui/button';
+import { Button } from '@/components/ui/button';
 import { Input } from '@ui/components/ui/input';
 import { Select } from '@ui/components/ui/select';
 import { showErrorToast } from '@renderer/lib/errorToast';
@@ -10,6 +10,7 @@ import {
   getLocalServerSettings,
   getLocalServerStatus,
   getPrintSettings,
+  resetDatabaseForDevelopment,
   getServerInterfaces,
   saveLocalServerSettings,
   savePrintSettings,
@@ -60,6 +61,8 @@ export function Configuration({ route, onNavigate }: ServerRouteComponentProps) 
   const [isSavingServerSettings, setIsSavingServerSettings] = useState(false);
   const [isTogglingServer, setIsTogglingServer] = useState(false);
   const [appMode, setAppMode] = useState<AppMode | null>(null);
+  const [isResetConfirmOpen, setIsResetConfirmOpen] = useState(false);
+  const [isResetting, setIsResetting] = useState(false);
 
   useEffect(() => {
     if (route.configurationTab !== 'printer') {
@@ -225,6 +228,23 @@ export function Configuration({ route, onNavigate }: ServerRouteComponentProps) 
     }
   };
 
+  const handleResetDatabase = async (): Promise<void> => {
+    setIsResetting(true);
+    try {
+      await resetDatabaseForDevelopment();
+      window.dispatchEvent(new Event('distribution-queue-updated'));
+      window.dispatchEvent(new Event('local-server-status-updated'));
+      toast.success('Database reset', {
+        description: 'All local data has been cleared.'
+      });
+      setIsResetConfirmOpen(false);
+    } catch (error) {
+      showErrorToast(error);
+    } finally {
+      setIsResetting(false);
+    }
+  };
+
   return (
     <section className="server-content-block">
       <h1 className="server-page-title">Configuration</h1>
@@ -250,6 +270,13 @@ export function Configuration({ route, onNavigate }: ServerRouteComponentProps) 
             onClick={() => navigateToConfigurationTab(route, onNavigate, 'log')}
           >
             Log
+          </button>
+          <button
+            type="button"
+            className={route.configurationTab === 'developer' ? 'configuration-tab active' : 'configuration-tab'}
+            onClick={() => navigateToConfigurationTab(route, onNavigate, 'developer')}
+          >
+            Developer
           </button>
         </aside>
 
@@ -415,7 +442,53 @@ export function Configuration({ route, onNavigate }: ServerRouteComponentProps) 
         {route.configurationTab === 'log' ? (
           <div className="server-placeholder" />
         ) : null}
+
+        {route.configurationTab === 'developer' ? (
+          <div className="configuration-form">
+            <p className="server-form-label">Development only</p>
+            <p className="server-form-muted">
+              Reset will clear all local tables (eligible data, users, distributions, client history
+              and runtime configuration).
+            </p>
+            <Button
+              className="server-btn server-start-btn"
+              onClick={() => {
+                setIsResetConfirmOpen(true);
+              }}
+            >
+              RESET
+            </Button>
+          </div>
+        ) : null}
       </div>
+
+      {isResetConfirmOpen ? (
+        <div className="distribution-modal-backdrop" role="presentation">
+          <div className="distribution-modal" role="dialog" aria-modal="true">
+            <h2>Confirm Reset</h2>
+            <p>This action will wipe local database data. Continue?</p>
+            <div className="distribution-modal-actions">
+              <Button
+                className="min-w-[124px]"
+                onClick={() => void handleResetDatabase()}
+                disabled={isResetting}
+              >
+                {isResetting ? 'Resetting...' : 'Reset'}
+              </Button>
+              <Button
+                variant="outline"
+                className="min-w-[124px]"
+                onClick={() => {
+                  setIsResetConfirmOpen(false);
+                }}
+                disabled={isResetting}
+              >
+                Cancel
+              </Button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </section>
   );
 }

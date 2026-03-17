@@ -1,5 +1,8 @@
 import { ipcMain } from 'electron';
 import type {
+  ClientDistributionHistoryInput,
+  ClientDistributionHistoryQuery,
+  ClientDistributionHistoryResult,
   DistributionQueueItem,
   EligibleMembersApiResponse,
   LocalDistributionEventInput
@@ -16,6 +19,8 @@ const CHANNEL_GET_DISTRIBUTION_DETAIL = 'eligibleData:getDistributionDetail';
 const CHANNEL_SAVE_DISTRIBUTION_EVENT = 'eligibleData:saveDistributionEvent';
 const CHANNEL_GET_DISTRIBUTION_QUEUE = 'eligibleData:getDistributionQueue';
 const CHANNEL_CLEAR_DISTRIBUTION_QUEUE = 'eligibleData:clearDistributionQueue';
+const CHANNEL_SAVE_CLIENT_DISTRIBUTION_HISTORY = 'eligibleData:saveClientDistributionHistory';
+const CHANNEL_GET_CLIENT_DISTRIBUTION_HISTORY = 'eligibleData:getClientDistributionHistory';
 
 function resolveEligibleMembersUrl(fdpCode: string): string {
   const apiBase = process.env.RENDERER_VITE_API_URL ?? process.env.VITE_API_URL;
@@ -46,6 +51,8 @@ export function registerEligibleDataIpc(eligibleDataService: EligibleDataService
   ipcMain.removeHandler(CHANNEL_SAVE_DISTRIBUTION_EVENT);
   ipcMain.removeHandler(CHANNEL_GET_DISTRIBUTION_QUEUE);
   ipcMain.removeHandler(CHANNEL_CLEAR_DISTRIBUTION_QUEUE);
+  ipcMain.removeHandler(CHANNEL_SAVE_CLIENT_DISTRIBUTION_HISTORY);
+  ipcMain.removeHandler(CHANNEL_GET_CLIENT_DISTRIBUTION_HISTORY);
 
   ipcMain.handle(CHANNEL_SAVE_ELIGIBLE_DATA, async (_event, payload: EligibleMembersApiResponse) => {
     return eligibleDataService.saveEligibleMembers(payload);
@@ -92,6 +99,20 @@ export function registerEligibleDataIpc(eligibleDataService: EligibleDataService
   ipcMain.handle(CHANNEL_CLEAR_DISTRIBUTION_QUEUE, async (): Promise<{ deleted: number }> => {
     return eligibleDataService.clearDistributionQueue();
   });
+
+  ipcMain.handle(
+    CHANNEL_SAVE_CLIENT_DISTRIBUTION_HISTORY,
+    async (_event, payload: ClientDistributionHistoryInput) => {
+      return eligibleDataService.saveClientDistributionHistory(payload);
+    }
+  );
+
+  ipcMain.handle(
+    CHANNEL_GET_CLIENT_DISTRIBUTION_HISTORY,
+    async (_event, query: ClientDistributionHistoryQuery): Promise<ClientDistributionHistoryResult> => {
+      return eligibleDataService.getClientDistributionHistory(query);
+    }
+  );
 
   ipcMain.handle(
     CHANNEL_SYNC_ELIGIBLE_DATA,

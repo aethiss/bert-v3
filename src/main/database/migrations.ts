@@ -116,6 +116,23 @@ const MIGRATIONS: string[] = [
   `
   CREATE INDEX IF NOT EXISTS idx_distribution_queue_cycle_code
     ON distribution_queue(cycle_code);
+  `,
+  `
+  CREATE TABLE IF NOT EXISTS client_distribution_history (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    alias TEXT NOT NULL,
+    host TEXT NOT NULL,
+    member_id INTEGER NOT NULL,
+    family_unique_code INTEGER NOT NULL,
+    cycle_code INTEGER NOT NULL,
+    cycle_name TEXT NOT NULL,
+    collected_by TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+  );
+  `,
+  `
+  CREATE INDEX IF NOT EXISTS idx_client_distribution_history_alias_created
+    ON client_distribution_history(alias, created_at);
   `
 ];
 

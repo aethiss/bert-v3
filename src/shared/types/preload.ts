@@ -1,5 +1,8 @@
 import type { AppMode } from './appMode';
 import type {
+  ClientDistributionHistoryInput,
+  ClientDistributionHistoryQuery,
+  ClientDistributionHistoryResult,
   DistributionQueueItem,
   DistributionDetailData,
   LocalDistributionEventInput,
@@ -10,6 +13,7 @@ import type {
 import type { CiamLoginResult, ExchangeCodeResult } from './ipc/auth';
 import type { InstallerModeState } from './ipc/installer';
 import type {
+  ClientConnectionSettings,
   LocalServerInterfaceInfo,
   LocalServerSettings,
   LocalServerStatus
@@ -42,6 +46,11 @@ export interface BertAppApi {
     startLocalServer(settings: LocalServerSettings): Promise<LocalServerStatus>;
     stopLocalServer(): Promise<LocalServerStatus>;
     getOperationsDashboard(query: OperationsDashboardQuery): Promise<OperationsDashboard>;
+    getClientConnectionSettings(): Promise<ClientConnectionSettings>;
+    setClientConnectionSettings(
+      settings: ClientConnectionSettings
+    ): Promise<ClientConnectionSettings>;
+    resetDatabaseForDevelopment(): Promise<void>;
   };
   eligibleData: {
     save(payload: EligibleMembersApiResponse): Promise<EligibleOverviewSummary>;
@@ -55,6 +64,10 @@ export interface BertAppApi {
     saveDistributionEvent(payload: LocalDistributionEventInput): Promise<{ id: number }>;
     getDistributionQueue(): Promise<DistributionQueueItem[]>;
     clearDistributionQueue(): Promise<{ deleted: number }>;
+    saveClientDistributionHistory(payload: ClientDistributionHistoryInput): Promise<{ id: number }>;
+    getClientDistributionHistory(
+      query: ClientDistributionHistoryQuery
+    ): Promise<ClientDistributionHistoryResult>;
     hasData(): Promise<boolean>;
     getOverviewSummary(): Promise<EligibleOverviewSummary>;
     clear(): Promise<void>;

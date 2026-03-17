@@ -5,6 +5,7 @@ import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
 const {
   buildOverviewSummaryFromPayload,
+  normalizeClientHistoryPagination,
   pickPreferredDistributionMember
 } = require('../../dist/main/services/eligibleDataService.js');
 
@@ -118,4 +119,19 @@ test('pickPreferredDistributionMember selects Principle role and falls back to f
 
   const fallback = pickPreferredDistributionMember(withoutPrinciple);
   assert.equal(fallback.id, 21);
+});
+
+test('normalizeClientHistoryPagination clamps invalid values and computes offset', () => {
+  const normalizedDefault = normalizeClientHistoryPagination(0, 0);
+  assert.equal(normalizedDefault.page, 1);
+  assert.equal(normalizedDefault.pageSize, 10);
+  assert.equal(normalizedDefault.offset, 0);
+
+  const normalizedCustom = normalizeClientHistoryPagination(3, 20);
+  assert.equal(normalizedCustom.page, 3);
+  assert.equal(normalizedCustom.pageSize, 20);
+  assert.equal(normalizedCustom.offset, 40);
+
+  const normalizedMax = normalizeClientHistoryPagination(1, 500);
+  assert.equal(normalizedMax.pageSize, 100);
 });

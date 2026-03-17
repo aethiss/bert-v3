@@ -234,3 +234,156 @@ test('eligibleDataService searches member offline by family unique code and docu
     fs.rmSync(tempDir, { recursive: true, force: true });
   }
 });
+
+test('client distributions inherit server operator and operations aggregates exclude server rows', async () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'bert-eligible-client-ops-'));
+  const dbPath = path.join(tempDir, 'test.sqlite');
+
+  const db = await open({
+    filename: dbPath,
+    driver: sqlite3.Database
+  });
+
+  try {
+    await runMigrations(db);
+    const service = createEligibleDataService(db);
+
+    await db.run(
+      `
+      INSERT INTO "user" (id, user_id, email, fdp, field_office)
+      VALUES (1, ?, ?, ?, ?)
+      `,
+      595,
+      'operator@example.org',
+      '2547002158',
+      'Damascus SO'
+    );
+
+    await service.saveEligibleMembers({
+      fdp_code: 'FDP-99',
+      fdp_name: 'Damascus',
+      total_households: 2,
+      total_cycles: 1,
+      cycles: [
+        {
+          cycleId: 'cycle-20',
+          cycleCode: 3301,
+          startDate: '2026-05-01',
+          endDate: '2026-05-31',
+          cooperatingPartner: null,
+          fieldDistributionPoint: null,
+          assistancePackageName: 'SFA',
+          cycleName: 'SFA - May',
+          cycleNote: null,
+          household_count: 2,
+          households: [
+            {
+              hhId: 'HH-20',
+              cycleCode: 3301,
+              assignedStatus: 'assigned',
+              householdSize: '3',
+              quantity: '1',
+              assistancePackageName: 'SFA',
+              cooperatingPartner: null,
+              fdp_id: 'fdp-id',
+              fdp_name: 'FDP-H',
+              Number_of_Children_between_6_and_23_Months: 0,
+              FamilyUniqueCode: 700001,
+              address: null,
+              status: 'ACTIVE',
+              eligible: true,
+              members: [
+                {
+                  id: 101,
+                  family: 700001,
+                  role: 'Principle',
+                  firstName: 'A',
+                  lastName: 'One',
+                  fatherName: null,
+                  motherName: null,
+                  motherLastName: null,
+                  cityOfBirth: null,
+                  dateOfBirth: null,
+                  documentNumber: 'DOC-101',
+                  cycleCode: 3301,
+                  status: 'eligible'
+                }
+              ]
+            },
+            {
+              hhId: 'HH-21',
+              cycleCode: 3301,
+              assignedStatus: 'assigned',
+              householdSize: '4',
+              quantity: '1',
+              assistancePackageName: 'SFA',
+              cooperatingPartner: null,
+              fdp_id: 'fdp-id',
+              fdp_name: 'FDP-H',
+              Number_of_Children_between_6_and_23_Months: 0,
+              FamilyUniqueCode: 700002,
+              address: null,
+              status: 'ACTIVE',
+              eligible: true,
+              members: [
+                {
+                  id: 102,
+                  family: 700002,
+                  role: 'Principle',
+                  firstName: 'B',
+                  lastName: 'Two',
+                  fatherName: null,
+                  motherName: null,
+                  motherLastName: null,
+                  cityOfBirth: null,
+                  dateOfBirth: null,
+                  documentNumber: 'DOC-102',
+                  cycleCode: 3301,
+                  status: 'eligible'
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    });
+
+    await service.saveDistributionEvent({
+      familyUniqueCode: 700001,
+      memberId: 101,
+      cycleCode: 3301,
+      mainOperator: 595,
+      mainOperatorFDP: '2547002158',
+      subOperator: null,
+      appSignature: '1234567890',
+      notes: null
+    });
+
+    await service.saveClientDistribution({
+      subOperator: 'Ahmed',
+      memberId: 102,
+      cycleCode: 3301
+    });
+
+    const queue = await service.getDistributionQueue();
+    assert.equal(queue.length, 2);
+    assert.equal(queue[1].mainOperator, 595);
+    assert.equal(queue[1].mainOperatorFDP, '2547002158');
+    assert.equal(queue[1].subOperator, 'Ahmed');
+
+    const operations = await service.getOperationsAggregates({
+      search: '',
+      page: 1,
+      pageSize: 10
+    });
+
+    assert.equal(operations.totalDistributions, 1);
+    assert.equal(operations.overviewBars.length, 1);
+    assert.equal(operations.overviewBars[0].alias, 'Ahmed');
+    assert.equal(operations.distributions.items.length, 1);
+    assert.equal(operations.distributions.items[0].subOperator, 'Ahmed');
+  } finally {
+    await db.close();
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+});

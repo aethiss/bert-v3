@@ -1,4 +1,7 @@
 import type {
+  ClientDistributionHistoryInput,
+  ClientDistributionHistoryQuery,
+  ClientDistributionHistoryResult,
   DistributionQueueItem,
   DistributionDetailData,
   LocalDistributionEventInput,
@@ -46,6 +49,18 @@ export async function getDistributionQueue(): Promise<DistributionQueueItem[]> {
 
 export async function clearDistributionQueue(): Promise<{ deleted: number }> {
   return window.bertApp.eligibleData.clearDistributionQueue();
+}
+
+export async function saveClientDistributionHistory(
+  payload: ClientDistributionHistoryInput
+): Promise<{ id: number }> {
+  return window.bertApp.eligibleData.saveClientDistributionHistory(payload);
+}
+
+export async function getClientDistributionHistory(
+  query: ClientDistributionHistoryQuery
+): Promise<ClientDistributionHistoryResult> {
+  return window.bertApp.eligibleData.getClientDistributionHistory(query);
 }
 
 export async function hasEligibleData(): Promise<boolean> {

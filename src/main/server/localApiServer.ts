@@ -240,6 +240,26 @@ export function createLocalApiServer(deps: LocalApiServerDependencies): LocalApi
       return;
     }
 
+    if (method === 'GET' && url.pathname === '/distribution/detail') {
+      const memberIdRaw = Number(url.searchParams.get('memberId'));
+      const cycleCodeRaw = Number(url.searchParams.get('cycleCode'));
+      const familyHhId = (url.searchParams.get('familyHhId') ?? '').trim();
+      if (!Number.isFinite(memberIdRaw) || !Number.isFinite(cycleCodeRaw) || !familyHhId) {
+        sendJson(res, 400, {
+          error: 'Missing or invalid memberId, cycleCode or familyHhId query parameters.'
+        });
+        return;
+      }
+
+      const detail = await deps.eligibleDataService.getDistributionDetail({
+        memberId: memberIdRaw,
+        cycleCode: cycleCodeRaw,
+        familyHhId
+      });
+      sendJson(res, 200, { result: detail });
+      return;
+    }
+
     sendJson(res, 404, { error: 'Not found.' });
   }
 

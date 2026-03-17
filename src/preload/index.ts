@@ -2,6 +2,7 @@ import { contextBridge, ipcRenderer } from 'electron';
 import type { AppMode } from '../shared/types/appMode';
 import type { InstallerModeState } from '../shared/types/ipc/installer';
 import type {
+  ClientConnectionSettings,
   LocalServerInterfaceInfo,
   LocalServerSettings,
   LocalServerStatus
@@ -69,6 +70,18 @@ const bertAppApi: BertAppApi = {
     },
     getOperationsDashboard(query) {
       return ipcRenderer.invoke('config:getOperationsDashboard', query);
+    },
+    getClientConnectionSettings() {
+      return ipcRenderer.invoke('config:getClientConnectionSettings') as Promise<ClientConnectionSettings>;
+    },
+    setClientConnectionSettings(settings: ClientConnectionSettings) {
+      return ipcRenderer.invoke(
+        'config:setClientConnectionSettings',
+        settings
+      ) as Promise<ClientConnectionSettings>;
+    },
+    resetDatabaseForDevelopment() {
+      return ipcRenderer.invoke('config:resetDatabaseForDevelopment') as Promise<void>;
     }
   },
   eligibleData: {
@@ -92,6 +105,12 @@ const bertAppApi: BertAppApi = {
     },
     clearDistributionQueue() {
       return ipcRenderer.invoke('eligibleData:clearDistributionQueue');
+    },
+    saveClientDistributionHistory(payload) {
+      return ipcRenderer.invoke('eligibleData:saveClientDistributionHistory', payload);
+    },
+    getClientDistributionHistory(query) {
+      return ipcRenderer.invoke('eligibleData:getClientDistributionHistory', query);
     },
     hasData() {
       return ipcRenderer.invoke('eligibleData:hasData');

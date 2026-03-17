@@ -25,3 +25,10 @@ export interface LocalServerClientPresence {
   isConnected: boolean;
   lastSeenAt: string | null;
 }
+
+export interface ClientConnectionSettings {
+  serverIp: string;
+  serverPort: number;
+  oneTimePassword: string;
+  alias: string;
+}

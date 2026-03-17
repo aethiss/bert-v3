@@ -11,9 +11,9 @@ TARGET_DURATION_SECONDS="${TARGET_DURATION_SECONDS:-60}"
 PING_INTERVAL_SECONDS="${PING_INTERVAL_SECONDS:-15}"
 
 ALIASES=(
-  "Bin Laden"
-  "Bibi"
-  "Trumph"
+  "M. Ali"
+  "Ahmed"
+  "Mohamed Yousef"
 )
 
 # Formato: memberId|cycleCode

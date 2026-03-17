@@ -1,6 +1,10 @@
 import { ipcMain } from 'electron';
 import { networkInterfaces } from 'node:os';
-import type { LocalServerInterfaceInfo, LocalServerSettings } from '../../shared/types/localServer';
+import type {
+  ClientConnectionSettings,
+  LocalServerInterfaceInfo,
+  LocalServerSettings
+} from '../../shared/types/localServer';
 import type { OperationsDashboardQuery } from '../../shared/types/operations';
 import type { PrintSettings } from '../../shared/types/printConfig';
 import type { RuntimeConfigService } from '../services/configService';
@@ -16,6 +20,9 @@ const CHANNEL_GET_LOCAL_SERVER_STATUS = 'config:getLocalServerStatus';
 const CHANNEL_START_LOCAL_SERVER = 'config:startLocalServer';
 const CHANNEL_STOP_LOCAL_SERVER = 'config:stopLocalServer';
 const CHANNEL_GET_OPERATIONS_DASHBOARD = 'config:getOperationsDashboard';
+const CHANNEL_GET_CLIENT_CONNECTION_SETTINGS = 'config:getClientConnectionSettings';
+const CHANNEL_SET_CLIENT_CONNECTION_SETTINGS = 'config:setClientConnectionSettings';
+const CHANNEL_RESET_DATABASE_FOR_DEVELOPMENT = 'config:resetDatabaseForDevelopment';
 
 function listLocalInterfaces(): LocalServerInterfaceInfo[] {
   const all = networkInterfaces();
@@ -63,6 +70,9 @@ export function registerConfigIpc(
   ipcMain.removeHandler(CHANNEL_START_LOCAL_SERVER);
   ipcMain.removeHandler(CHANNEL_STOP_LOCAL_SERVER);
   ipcMain.removeHandler(CHANNEL_GET_OPERATIONS_DASHBOARD);
+  ipcMain.removeHandler(CHANNEL_GET_CLIENT_CONNECTION_SETTINGS);
+  ipcMain.removeHandler(CHANNEL_SET_CLIENT_CONNECTION_SETTINGS);
+  ipcMain.removeHandler(CHANNEL_RESET_DATABASE_FOR_DEVELOPMENT);
 
   ipcMain.handle(CHANNEL_GET_PRINT_SETTINGS, async () => {
     return configService.getPrintSettings();
@@ -106,15 +116,28 @@ export function registerConfigIpc(
     return localApiServer.getStatus();
   });
 
+  ipcMain.handle(CHANNEL_GET_CLIENT_CONNECTION_SETTINGS, async () => {
+    return configService.getClientConnectionSettings();
+  });
+
+  ipcMain.handle(
+    CHANNEL_SET_CLIENT_CONNECTION_SETTINGS,
+    async (_event, settings: ClientConnectionSettings) => {
+      return configService.setClientConnectionSettings(settings);
+    }
+  );
+
+  ipcMain.handle(CHANNEL_RESET_DATABASE_FOR_DEVELOPMENT, async () => {
+    await localApiServer.stop();
+    await configService.resetDatabaseForDevelopment();
+  });
+
   ipcMain.handle(
     CHANNEL_GET_OPERATIONS_DASHBOARD,
     async (_event, query: OperationsDashboardQuery) => {
       const status = localApiServer.getStatus();
       const presence = localApiServer.getClientPresence();
-      const aggregates = await eligibleDataService.getOperationsAggregates(
-        query,
-        status.startedAt
-      );
+      const aggregates = await eligibleDataService.getOperationsAggregates(query);
 
       const cycleLookup = new Map<number, { cycleName: string; totalHouseholds: number }>();
       for (const cycle of aggregates.cycleProgress) {
@@ -180,7 +203,6 @@ export function registerConfigIpc(
 
       return {
         serverRunning: status.running,
-        sessionStartedAt: status.startedAt,
         totalDistributions: aggregates.totalDistributions,
         totalEligibleHouseholds,
         cycleProgress: aggregates.cycleProgress,

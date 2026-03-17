@@ -300,7 +300,7 @@ main {
 
 .server-page {
   min-height: 100vh;
-  background: #f9fafc;
+  background: #fcfcfd;
 }
 
 .server-shell {
@@ -308,7 +308,7 @@ main {
   border: 1px solid #d6d8dc;
   border-radius: 0;
   overflow: hidden;
-  background: #f9fafc;
+  background: #fcfcfd;
 }
 
 .server-top-nav {
@@ -1269,10 +1269,17 @@ main {
 
 .operations-bar-row {
   display: grid;
-  grid-template-columns: minmax(80px, auto) 1fr auto;
+  grid-template-columns: 160px minmax(0, 1fr) 28px;
   align-items: center;
   gap: 10px;
   font-size: 13px;
+}
+
+.operations-bar-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .operations-bar-track {
@@ -1286,6 +1293,10 @@ main {
   height: 100%;
   border-radius: 6px;
   background: linear-gradient(90deg, #73b8ef 0%, #0088cb 100%);
+}
+
+.operations-bar-value {
+  text-align: right;
 }
 
 .operations-client-list {
@@ -1427,6 +1438,10 @@ main {
 
 .operations-page-btn {
   min-width: 84px;
+}
+
+.client-overview-table-wrap {
+  margin-top: 12px;
 }
 
 @media (max-width: 1200px) {
