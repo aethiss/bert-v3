@@ -594,16 +594,43 @@ main {
 
 .distribution-search-row {
   display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 8px;
+  grid-template-columns: minmax(320px, 760px) auto auto;
+  gap: 10px;
   align-items: center;
+  justify-content: start;
 }
 
 .distribution-search-input {
+  width: 100%;
+  max-width: 760px;
   height: 38px;
   border-color: #d3d5d9;
   background: #efeff0;
   font-size: 14px;
+}
+
+.distribution-search-btn {
+  min-width: 146px;
+  height: 44px;
+  padding: 0 16px;
+  font-size: 14px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.distribution-btn-icon {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+}
+
+.distribution-scan-btn.active {
+  border-color: #0088cb;
+  color: #0088cb;
+  background: #f5fbff;
 }
 
 .distribution-table {

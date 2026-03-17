@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react';
-import { ExternalLink } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { ExternalLink, ScanLine, Search } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@ui/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -7,6 +7,7 @@ import type {
   ClientRouteComponentProps
 } from '@renderer/components/client/types';
 import type { DistributionDetailData, DistributionSearchResult } from '@shared/types/eligible';
+import { parseDocumentIdFromPdf417Payload } from '@shared/types/scanner';
 import type { ClientSession } from '@renderer/services/clientServerService';
 import {
   getDistributionDetailFromLocalServer,
@@ -37,6 +38,7 @@ function asAgeLabel(age: number | null): string {
 
 export function Distribution({ route, onNavigate, session }: ClientDistributionProps) {
   const [query, setQuery] = useState('');
+  const [isScanModeActive, setIsScanModeActive] = useState(false);
   const [result, setResult] = useState<DistributionSearchResult | null>(null);
   const [hasSearched, setHasSearched] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
@@ -50,18 +52,93 @@ export function Distribution({ route, onNavigate, session }: ClientDistributionP
   const [isSavingDistribution, setIsSavingDistribution] = useState(false);
   const [blockingMessage, setBlockingMessage] = useState<string | null>(null);
   const [printPreviewPayload, setPrintPreviewPayload] = useState<ReceiptPayload | null>(null);
+  const scanBufferRef = useRef('');
+  const scanTimerRef = useRef<number | null>(null);
 
-  const filteredMembers = useMemo(() => {
+  const filteredMembers = (() => {
     if (!detail || selectedCycleCode === null) {
       return [];
     }
 
     return detail.members.filter((member) => member.cycleCode === selectedCycleCode);
-  }, [detail, selectedCycleCode]);
+  })();
 
-  const selectedMember = useMemo(() => {
+  const selectedMember = (() => {
     return filteredMembers.find((member) => member.memberId === selectedMemberId) ?? null;
-  }, [filteredMembers, selectedMemberId]);
+  })();
+
+  useEffect(() => {
+    if (route.distributionMode === 'detail') {
+      setIsScanModeActive(false);
+    }
+  }, [route.distributionMode]);
+
+  useEffect(() => {
+    if (!isScanModeActive || route.distributionMode === 'detail') {
+      return;
+    }
+
+    const clearTimer = () => {
+      if (scanTimerRef.current !== null) {
+        window.clearTimeout(scanTimerRef.current);
+        scanTimerRef.current = null;
+      }
+    };
+
+    const finalizeScan = () => {
+      clearTimer();
+      const payload = scanBufferRef.current;
+      scanBufferRef.current = '';
+      setIsScanModeActive(false);
+
+      const parsedDocumentId = parseDocumentIdFromPdf417Payload(payload);
+      if (!parsedDocumentId) {
+        toast.error('Scan failed', {
+          description: 'Unable to extract Document ID from scanned barcode payload.'
+        });
+        return;
+      }
+
+      setQuery(parsedDocumentId);
+      toast.success('Document scanned', {
+        description: `Document ID ${parsedDocumentId} extracted.`
+      });
+    };
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        scanBufferRef.current = '';
+        clearTimer();
+        setIsScanModeActive(false);
+        toast.message('Scan cancelled');
+        return;
+      }
+
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        finalizeScan();
+        return;
+      }
+
+      if (event.key.length !== 1) {
+        return;
+      }
+
+      event.preventDefault();
+      scanBufferRef.current += event.key;
+      clearTimer();
+      scanTimerRef.current = window.setTimeout(() => {
+        finalizeScan();
+      }, 180);
+    };
+
+    window.addEventListener('keydown', onKeyDown, true);
+    return () => {
+      window.removeEventListener('keydown', onKeyDown, true);
+      clearTimer();
+    };
+  }, [isScanModeActive, route.distributionMode]);
 
   const handleSearch = async (): Promise<void> => {
     if (!session) {
@@ -274,8 +351,40 @@ export function Distribution({ route, onNavigate, session }: ClientDistributionP
               }}
               placeholder="FamilyUniqueCode or documentNumber (numeric)"
             />
-            <Button className="server-btn" onClick={() => void handleSearch()} disabled={isSearching || !session}>
+            <Button
+              className="server-btn distribution-search-btn"
+              onClick={() => void handleSearch()}
+              disabled={isSearching || !session}
+            >
+              <Search className="distribution-btn-icon" />
               {isSearching ? 'Searching...' : 'Search'}
+            </Button>
+            <Button
+              className={`server-btn distribution-search-btn distribution-scan-btn${
+                isScanModeActive ? ' active' : ''
+              }`}
+              variant={isScanModeActive ? 'outline' : 'default'}
+              onClick={() => {
+                if (isScanModeActive) {
+                  scanBufferRef.current = '';
+                  if (scanTimerRef.current !== null) {
+                    window.clearTimeout(scanTimerRef.current);
+                    scanTimerRef.current = null;
+                  }
+                  setIsScanModeActive(false);
+                  return;
+                }
+
+                scanBufferRef.current = '';
+                setIsScanModeActive(true);
+                toast.message('Scanner listening', {
+                  description: 'Scan barcode now. Press Esc to cancel.'
+                });
+              }}
+              disabled={isSearching}
+            >
+              <ScanLine className="distribution-btn-icon" />
+              {isScanModeActive ? 'Cancel Scan' : 'Scan Document'}
             </Button>
           </div>
 
