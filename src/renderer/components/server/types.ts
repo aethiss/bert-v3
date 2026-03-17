@@ -2,7 +2,7 @@ export type ServerSection = 'overview' | 'distribution' | 'operations' | 'data' 
 
 export type DistributionMode = 'search' | 'result' | 'detail';
 
-export type ConfigurationTab = 'server' | 'printer' | 'log' | 'developer';
+export type ConfigurationTab = 'server' | 'printer' | 'log' | 'language' | 'developer';
 
 export interface ServerRouteState {
   section: ServerSection;

@@ -8,6 +8,7 @@ import type {
   LocalServerStatus
 } from '../shared/types/localServer';
 import type { PrintSettings } from '../shared/types/printConfig';
+import type { SupportedLocale } from '../shared/types/language';
 import type { BertAppApi } from '../shared/types/preload';
 
 const bertAppApi: BertAppApi = {
@@ -46,6 +47,12 @@ const bertAppApi: BertAppApi = {
     },
     setPrintSettings(settings: PrintSettings) {
       return ipcRenderer.invoke('config:setPrintSettings', settings) as Promise<PrintSettings>;
+    },
+    getLanguage() {
+      return ipcRenderer.invoke('config:getLanguage') as Promise<SupportedLocale>;
+    },
+    setLanguage(language: SupportedLocale) {
+      return ipcRenderer.invoke('config:setLanguage', language) as Promise<SupportedLocale>;
     },
     getServerInterfaces() {
       return ipcRenderer.invoke('config:getServerInterfaces') as Promise<LocalServerInterfaceInfo[]>;

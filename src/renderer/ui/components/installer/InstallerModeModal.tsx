@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { useIntl } from 'react-intl';
 import type { AppMode } from '@shared/types/appMode';
 
 interface InstallerModeModalProps {
@@ -14,6 +15,7 @@ export function InstallerModeModal({
   errorMessage,
   onConfirm
 }: InstallerModeModalProps) {
+  const intl = useIntl();
   const [selectedMode, setSelectedMode] = useState<AppMode>('CLIENT');
   const [confirmed, setConfirmed] = useState(false);
 
@@ -27,14 +29,19 @@ export function InstallerModeModal({
     <div className="installer-backdrop" role="presentation">
       <section className="installer-modal" role="dialog" aria-modal="true" aria-labelledby="installer-title">
         <header className="installer-titlebar">
-          <p>BERT Setup</p>
-          <button type="button" className="installer-close" aria-label="Close" disabled>
+          <p>{intl.formatMessage({ id: 'installer.setupTitle' })}</p>
+          <button
+            type="button"
+            className="installer-close"
+            aria-label={intl.formatMessage({ id: 'installer.closeAria' })}
+            disabled
+          >
             ×
           </button>
         </header>
 
         <h2 id="installer-title" className="installer-main-title">
-          Choose installation mode
+          {intl.formatMessage({ id: 'installer.chooseModeTitle' })}
         </h2>
 
         <div className="installer-grid">
@@ -56,7 +63,7 @@ export function InstallerModeModal({
                 <circle cx="23" cy="32.5" r="1.8" className="mode-icon-detail" />
               </svg>
             </span>
-            <span className="mode-card-label">SERVER</span>
+            <span className="mode-card-label">{intl.formatMessage({ id: 'installer.mode.server' })}</span>
           </button>
 
           <button
@@ -72,11 +79,11 @@ export function InstallerModeModal({
                 <rect x="21" y="50" width="22" height="3" rx="1.5" />
               </svg>
             </span>
-            <span className="mode-card-label">CLIENT</span>
+            <span className="mode-card-label">{intl.formatMessage({ id: 'installer.mode.client' })}</span>
           </button>
         </div>
 
-        <div className="installer-warning">This choice cannot be changed later.</div>
+        <div className="installer-warning">{intl.formatMessage({ id: 'installer.warningImmutable' })}</div>
 
         <label className="installer-checkbox-row">
           <input
@@ -85,7 +92,7 @@ export function InstallerModeModal({
             onChange={(event) => setConfirmed(event.target.checked)}
             disabled={isSubmitting}
           />
-          <span>I understand and want to continue</span>
+          <span>{intl.formatMessage({ id: 'installer.confirmLabel' })}</span>
         </label>
 
         {errorMessage ? <p className="installer-error">{errorMessage}</p> : null}
@@ -99,7 +106,9 @@ export function InstallerModeModal({
               void onConfirm(selectedMode);
             }}
           >
-            {isSubmitting ? 'Saving...' : 'Next'}
+            {isSubmitting
+              ? intl.formatMessage({ id: 'common.saving' })
+              : intl.formatMessage({ id: 'common.next' })}
           </button>
         </footer>
       </section>

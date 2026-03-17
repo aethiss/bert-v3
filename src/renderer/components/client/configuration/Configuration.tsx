@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useIntl } from 'react-intl';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@ui/components/ui/input';
@@ -50,6 +51,7 @@ export function Configuration({
   onDisconnect,
   onAfterReset
 }: ClientConfigurationProps) {
+  const intl = useIntl();
   const [printFormat, setPrintFormat] = useState<PrintFormat>('A5');
   const [printDisabled, setPrintDisabled] = useState(false);
   const [isLoadingPrintSettings, setIsLoadingPrintSettings] = useState(false);
@@ -96,8 +98,8 @@ export function Configuration({
         format: printFormat,
         disabled: printDisabled
       });
-      toast.success('Saved', {
-        description: 'Printing configuration updated.'
+      toast.success(intl.formatMessage({ id: 'common.saved' }), {
+        description: intl.formatMessage({ id: 'config.printer.updatedDescription' })
       });
     } catch (error) {
       showErrorToast(error);
@@ -110,8 +112,8 @@ export function Configuration({
     setIsResetting(true);
     try {
       await resetDatabaseForDevelopment();
-      toast.success('Database reset', {
-        description: 'All local data has been cleared.'
+      toast.success(intl.formatMessage({ id: 'common.reset' }), {
+        description: intl.formatMessage({ id: 'config.databaseReset.description' })
       });
       setIsResetConfirmOpen(false);
       onAfterReset();
@@ -124,7 +126,7 @@ export function Configuration({
 
   return (
     <section className="server-content-block">
-      <h1 className="server-page-title">Configuration</h1>
+      <h1 className="server-page-title">{intl.formatMessage({ id: 'config.title' })}</h1>
       <div className="configuration-layout">
         <aside className="configuration-sidebar">
           <button
@@ -132,28 +134,28 @@ export function Configuration({
             className={route.configurationTab === 'connection' ? 'configuration-tab active' : 'configuration-tab'}
             onClick={() => navigateToConfigurationTab(route, onNavigate, 'connection')}
           >
-            Connection
+            {intl.formatMessage({ id: 'config.tabs.connection' })}
           </button>
           <button
             type="button"
             className={route.configurationTab === 'printer' ? 'configuration-tab active' : 'configuration-tab'}
             onClick={() => navigateToConfigurationTab(route, onNavigate, 'printer')}
           >
-            Printer
+            {intl.formatMessage({ id: 'config.tabs.printer' })}
           </button>
           <button
             type="button"
             className={route.configurationTab === 'developer' ? 'configuration-tab active' : 'configuration-tab'}
             onClick={() => navigateToConfigurationTab(route, onNavigate, 'developer')}
           >
-            Developer
+            {intl.formatMessage({ id: 'config.tabs.developer' })}
           </button>
         </aside>
 
         {route.configurationTab === 'connection' ? (
           <div className="configuration-form">
             <label className="server-form-label">
-              Server IP
+              {intl.formatMessage({ id: 'config.connection.serverIp' })}
               <Input
                 className="server-form-control"
                 value={settings.serverIp}
@@ -167,7 +169,7 @@ export function Configuration({
             </label>
 
             <label className="server-form-label">
-              Port
+              {intl.formatMessage({ id: 'config.connection.port' })}
               <Input
                 className="server-form-control"
                 inputMode="numeric"
@@ -183,7 +185,7 @@ export function Configuration({
             </label>
 
             <label className="server-form-label">
-              Password
+              {intl.formatMessage({ id: 'config.connection.password' })}
               <Input
                 className="server-form-control"
                 value={settings.oneTimePassword}
@@ -197,7 +199,7 @@ export function Configuration({
             </label>
 
             <label className="server-form-label">
-              Alias
+              {intl.formatMessage({ id: 'config.connection.alias' })}
               <Input
                 className="server-form-control"
                 maxLength={128}
@@ -211,7 +213,16 @@ export function Configuration({
               />
             </label>
 
-            <p className="server-form-muted">Status: {isConnected ? 'Connected' : 'Disconnected'}</p>
+            <p className="server-form-muted">
+              {intl.formatMessage(
+                { id: 'config.connection.stateLine' },
+                {
+                  status: isConnected
+                    ? intl.formatMessage({ id: 'config.connection.connected' })
+                    : intl.formatMessage({ id: 'config.connection.disconnected' })
+                }
+              )}
+            </p>
 
             <Button
               className="server-btn server-start-btn"
@@ -231,7 +242,11 @@ export function Configuration({
                     !settings.alias.trim()))
               }
             >
-              {isSubmittingConnection ? 'Connecting...' : isConnected ? 'Disconnect' : 'Connect'}
+              {isSubmittingConnection
+                ? intl.formatMessage({ id: 'config.connection.connecting' })
+                : isConnected
+                  ? intl.formatMessage({ id: 'actions.disconnect' })
+                  : intl.formatMessage({ id: 'actions.connect' })}
             </Button>
           </div>
         ) : null}
@@ -239,7 +254,7 @@ export function Configuration({
         {route.configurationTab === 'printer' ? (
           <div className="configuration-form">
             <label className="server-form-label">
-              Printing Size
+              {intl.formatMessage({ id: 'config.printer.size' })}
               <Select
                 className="server-form-control"
                 value={printFormat}
@@ -259,11 +274,8 @@ export function Configuration({
 
             <section className="printing-disable-card">
               <div className="printing-disable-content">
-                <h3>Disable Printing</h3>
-                <p>
-                  This option will allow the application to continue distributions without default
-                  printing.
-                </p>
+                <h3>{intl.formatMessage({ id: 'config.printer.disableTitle' })}</h3>
+                <p>{intl.formatMessage({ id: 'config.printer.disableDescription' })}</p>
               </div>
               <label className="printing-switch">
                 <input
@@ -283,25 +295,24 @@ export function Configuration({
               onClick={() => void handleSavePrintSettings()}
               disabled={isLoadingPrintSettings || isSavingPrintSettings}
             >
-              {isSavingPrintSettings ? 'Saving...' : 'Save'}
+              {isSavingPrintSettings
+                ? intl.formatMessage({ id: 'common.saving' })
+                : intl.formatMessage({ id: 'common.save' })}
             </Button>
           </div>
         ) : null}
 
         {route.configurationTab === 'developer' ? (
           <div className="configuration-form">
-            <p className="server-form-label">Development only</p>
-            <p className="server-form-muted">
-              Reset will clear all local tables (eligible data, users, distributions, client history
-              and runtime configuration).
-            </p>
+            <p className="server-form-label">{intl.formatMessage({ id: 'config.developer.title' })}</p>
+            <p className="server-form-muted">{intl.formatMessage({ id: 'config.developer.description' })}</p>
             <Button
               className="server-btn server-start-btn"
               onClick={() => {
                 setIsResetConfirmOpen(true);
               }}
             >
-              RESET
+              {intl.formatMessage({ id: 'config.developer.resetButton' })}
             </Button>
           </div>
         ) : null}
@@ -310,15 +321,17 @@ export function Configuration({
       {isResetConfirmOpen ? (
         <div className="distribution-modal-backdrop" role="presentation">
           <div className="distribution-modal" role="dialog" aria-modal="true">
-            <h2>Confirm Reset</h2>
-            <p>This action will wipe local database data. Continue?</p>
+            <h2>{intl.formatMessage({ id: 'config.reset.confirmTitle' })}</h2>
+            <p>{intl.formatMessage({ id: 'config.reset.confirmDescription' })}</p>
             <div className="distribution-modal-actions">
               <Button
                 className="min-w-[124px]"
                 onClick={() => void handleResetDatabase()}
                 disabled={isResetting}
               >
-                {isResetting ? 'Resetting...' : 'Reset'}
+                {isResetting
+                  ? intl.formatMessage({ id: 'common.resetting' })
+                  : intl.formatMessage({ id: 'common.reset' })}
               </Button>
               <Button
                 variant="outline"
@@ -328,7 +341,7 @@ export function Configuration({
                 }}
                 disabled={isResetting}
               >
-                Cancel
+                {intl.formatMessage({ id: 'common.cancel' })}
               </Button>
             </div>
           </div>

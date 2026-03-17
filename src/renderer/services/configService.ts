@@ -6,6 +6,7 @@ import type {
 } from '@shared/types/localServer';
 import type { OperationsDashboard, OperationsDashboardQuery } from '@shared/types/operations';
 import type { PrintSettings } from '@shared/types/printConfig';
+import type { SupportedLocale } from '@shared/types/language';
 
 export async function getPrintSettings(): Promise<PrintSettings> {
   return window.bertApp.config.getPrintSettings();
@@ -13,6 +14,14 @@ export async function getPrintSettings(): Promise<PrintSettings> {
 
 export async function savePrintSettings(settings: PrintSettings): Promise<PrintSettings> {
   return window.bertApp.config.setPrintSettings(settings);
+}
+
+export async function getLanguage(): Promise<SupportedLocale> {
+  return window.bertApp.config.getLanguage();
+}
+
+export async function saveLanguage(language: SupportedLocale): Promise<SupportedLocale> {
+  return window.bertApp.config.setLanguage(language);
 }
 
 export async function getServerInterfaces(): Promise<LocalServerInterfaceInfo[]> {

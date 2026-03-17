@@ -1,4 +1,5 @@
 import { House, UsersRound } from 'lucide-react';
+import { useIntl } from 'react-intl';
 import { Button } from '@ui/components/ui/button';
 import type { EligibleOverviewSummary } from '@shared/types/eligible';
 
@@ -11,19 +12,21 @@ interface OverviewProps {
   onSynchronize: () => void;
 }
 
-function formatDate(value: string): string {
+function formatDate(value: string, locale: string): string {
   if (!value) {
-    return '01/Jan/2026';
+    return '';
   }
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) {
-    return '01/Jan/2026';
+    return '';
   }
 
-  const day = String(date.getUTCDate()).padStart(2, '0');
-  const month = date.toLocaleString('en-US', { month: 'short', timeZone: 'UTC' });
-  const year = date.getUTCFullYear();
-  return `${day}/${month}/${year}`;
+  return new Intl.DateTimeFormat(locale, {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    timeZone: 'UTC'
+  }).format(date);
 }
 
 export function Overview({
@@ -34,6 +37,7 @@ export function Overview({
   isOnline,
   onSynchronize
 }: OverviewProps) {
+  const intl = useIntl();
   const cycles = overviewSummary.cycles;
   const firstCycle = cycles[0];
   const secondCycle = cycles[1];
@@ -42,17 +46,19 @@ export function Overview({
 
   return (
     <section className="server-content-block">
-      <h1 className="server-page-title">Overview</h1>
+      <h1 className="server-page-title">{intl.formatMessage({ id: 'overview.server.title' })}</h1>
       <div className="server-row-headline">
         <p>
-          Synchronize data to start using the Application
+          {intl.formatMessage({ id: 'overview.server.syncPrompt' })}
           <span className="overview-sync-meta">
-            Last sync:{' '}
+            {intl.formatMessage({ id: 'overview.server.lastSync' })}:{' '}
             {overviewSummary.lastSynchronizedAt
-              ? formatDate(overviewSummary.lastSynchronizedAt)
-              : 'Never'}
+              ? formatDate(overviewSummary.lastSynchronizedAt, intl.locale)
+              : intl.formatMessage({ id: 'overview.server.never' })}
             {' • '}
-            {isOnline ? 'Online' : 'Offline'}
+            {isOnline
+              ? intl.formatMessage({ id: 'status.online' })
+              : intl.formatMessage({ id: 'status.offline' })}
           </span>
         </p>
         <Button
@@ -60,7 +66,9 @@ export function Overview({
           onClick={onSynchronize}
           disabled={isSynchronizing || isSynchronizeDisabled}
         >
-          {isSynchronizing ? 'Synchronizing...' : 'Synchronize'}
+          {isSynchronizing
+            ? intl.formatMessage({ id: 'overview.server.synchronizing' })
+            : intl.formatMessage({ id: 'overview.server.synchronize' })}
         </Button>
       </div>
       <hr className="server-divider" />
@@ -69,29 +77,39 @@ export function Overview({
         <div className="overview-cards-grid overview-cards-grid-with-sync">
           <article className="overview-card">
             <div className="overview-card-head">
-              <p>{firstCycle?.cycleName ?? firstCycle?.assistancePackageName ?? 'Cycle 1'}</p>
+              <p>
+                {firstCycle?.cycleName ??
+                  firstCycle?.assistancePackageName ??
+                  intl.formatMessage({ id: 'overview.server.cycleFallback' }, { index: 1 })}
+              </p>
               {firstCycleTag ? <span className="overview-chip">{firstCycleTag}</span> : null}
             </div>
             <p className="overview-card-value">{firstCycle?.householdCount ?? 0}</p>
             <p className="overview-card-sub">
-              {formatDate(firstCycle?.startDate ?? '')} - {formatDate(firstCycle?.endDate ?? '')}
+              {formatDate(firstCycle?.startDate ?? '', intl.locale)} -{' '}
+              {formatDate(firstCycle?.endDate ?? '', intl.locale)}
             </p>
           </article>
 
           <article className="overview-card">
             <div className="overview-card-head">
-              <p>{secondCycle?.cycleName ?? secondCycle?.assistancePackageName ?? 'Cycle 2'}</p>
+              <p>
+                {secondCycle?.cycleName ??
+                  secondCycle?.assistancePackageName ??
+                  intl.formatMessage({ id: 'overview.server.cycleFallback' }, { index: 2 })}
+              </p>
               {secondCycleTag ? <span className="overview-chip">{secondCycleTag}</span> : null}
             </div>
             <p className="overview-card-value">{secondCycle?.householdCount ?? 0}</p>
             <p className="overview-card-sub">
-              {formatDate(secondCycle?.startDate ?? '')} - {formatDate(secondCycle?.endDate ?? '')}
+              {formatDate(secondCycle?.startDate ?? '', intl.locale)} -{' '}
+              {formatDate(secondCycle?.endDate ?? '', intl.locale)}
             </p>
           </article>
 
           <article className="overview-card">
             <div className="overview-card-head">
-              <p>Members</p>
+              <p>{intl.formatMessage({ id: 'overview.server.members' })}</p>
               <UsersRound size={16} />
             </div>
             <p className="overview-card-value">{overviewSummary.totalMembers}</p>
@@ -99,7 +117,7 @@ export function Overview({
 
           <article className="overview-card">
             <div className="overview-card-head">
-              <p>Households</p>
+              <p>{intl.formatMessage({ id: 'overview.server.households' })}</p>
               <House size={16} />
             </div>
             <p className="overview-card-value">{overviewSummary.totalHouseholds}</p>

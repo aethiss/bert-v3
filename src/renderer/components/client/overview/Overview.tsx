@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Search } from 'lucide-react';
+import { useIntl } from 'react-intl';
 import { Button } from '@ui/components/ui/button';
 import { Input } from '@ui/components/ui/input';
 import type { ClientDistributionHistoryItem } from '@shared/types/eligible';
@@ -12,27 +13,33 @@ interface ClientOverviewProps {
   onNavigateToConnection: () => void;
 }
 
-function formatDateTime(value: string): { date: string; time: string } {
+function formatDateTime(
+  value: string,
+  locale: string,
+  notAvailableLabel: string
+): { date: string; time: string } {
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) {
-    return { date: 'N/A', time: 'N/A' };
+    return { date: notAvailableLabel, time: notAvailableLabel };
   }
 
   return {
-    date: parsed.toLocaleDateString('en-GB', {
+    date: parsed.toLocaleDateString(locale, {
       day: '2-digit',
-      month: '2-digit',
+      month: 'short',
       year: 'numeric'
     }),
-    time: parsed.toLocaleTimeString('en-GB', {
+    time: parsed.toLocaleTimeString(locale, {
       hour: '2-digit',
       minute: '2-digit',
-      hour12: false
+      hour12: false,
+      hourCycle: 'h23'
     })
   };
 }
 
 export function Overview({ isConnected, alias, onNavigateToConnection }: ClientOverviewProps) {
+  const intl = useIntl();
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const [pageSize] = useState(10);
@@ -96,17 +103,19 @@ export function Overview({ isConnected, alias, onNavigateToConnection }: ClientO
 
   const hasRows = rows.length > 0;
   const connectedTitle = useMemo(() => {
-    return alias.trim() ? `Overview · ${alias.trim()}` : 'Overview';
-  }, [alias]);
+    return alias.trim()
+      ? intl.formatMessage({ id: 'overview.client.connectedTitle' }, { alias: alias.trim() })
+      : intl.formatMessage({ id: 'overview.client.title' });
+  }, [alias, intl]);
 
   if (!isConnected) {
     return (
       <section className="server-content-block">
-        <h1 className="server-page-title">Home</h1>
+        <h1 className="server-page-title">{intl.formatMessage({ id: 'overview.client.homeTitle' })}</h1>
         <div className="server-row-headline">
-          <p>Connect to Host to start distribution</p>
+          <p>{intl.formatMessage({ id: 'overview.client.connectPrompt' })}</p>
           <Button className="server-btn" onClick={onNavigateToConnection}>
-            Connect
+            {intl.formatMessage({ id: 'actions.connect' })}
           </Button>
         </div>
         <hr className="server-divider" />
@@ -122,7 +131,7 @@ export function Overview({ isConnected, alias, onNavigateToConnection }: ClientO
         <Input
           value={search}
           className="operations-search-input server-form-control"
-          placeholder="Search"
+          placeholder={intl.formatMessage({ id: 'overview.client.searchPlaceholder' })}
           onChange={(event) => {
             setSearch(event.target.value);
             setPage(1);
@@ -132,20 +141,24 @@ export function Overview({ isConnected, alias, onNavigateToConnection }: ClientO
       </div>
 
       <div className="client-overview-table-wrap">
-        <table className="operations-table" aria-label="Client distributions">
+        <table className="operations-table" aria-label={intl.formatMessage({ id: 'overview.client.tableAria' })}>
           <thead>
             <tr>
-              <th>UUID</th>
-              <th>Date</th>
-              <th>Time</th>
-              <th>Cycle</th>
-              <th>Collected By</th>
+              <th>{intl.formatMessage({ id: 'table.uuid' })}</th>
+              <th>{intl.formatMessage({ id: 'table.date' })}</th>
+              <th>{intl.formatMessage({ id: 'table.time' })}</th>
+              <th>{intl.formatMessage({ id: 'table.cycle' })}</th>
+              <th>{intl.formatMessage({ id: 'table.collectedBy' })}</th>
             </tr>
           </thead>
           <tbody>
             {hasRows
               ? rows.map((row) => {
-                  const dateTime = formatDateTime(row.createdAt);
+                  const dateTime = formatDateTime(
+                    row.createdAt,
+                    intl.locale,
+                    intl.formatMessage({ id: 'common.na' })
+                  );
                   return (
                     <tr key={row.id}>
                       <td>{row.memberId}</td>
@@ -160,7 +173,7 @@ export function Overview({ isConnected, alias, onNavigateToConnection }: ClientO
             {!hasRows && !isLoading ? (
               <tr>
                 <td colSpan={5}>
-                  No distributions recorded by this client in the current local history.
+                  {intl.formatMessage({ id: 'overview.client.empty' })}
                 </td>
               </tr>
             ) : null}
@@ -169,7 +182,14 @@ export function Overview({ isConnected, alias, onNavigateToConnection }: ClientO
       </div>
 
       <div className="operations-pagination">
-        <p>{isLoading ? 'Loading...' : `${Math.min(total, rows.length)} of ${total} row(s) shown.`}</p>
+        <p>
+          {isLoading
+            ? intl.formatMessage({ id: 'common.loading' })
+            : intl.formatMessage(
+                { id: 'overview.client.rowsShown' },
+                { shown: Math.min(total, rows.length), total }
+              )}
+        </p>
         <div>
           <button
             type="button"
@@ -179,7 +199,7 @@ export function Overview({ isConnected, alias, onNavigateToConnection }: ClientO
               setPage((previous) => Math.max(1, previous - 1));
             }}
           >
-            Previous
+            {intl.formatMessage({ id: 'common.previous' })}
           </button>
           <button
             type="button"
@@ -189,7 +209,7 @@ export function Overview({ isConnected, alias, onNavigateToConnection }: ClientO
               setPage((previous) => Math.min(totalPages, previous + 1));
             }}
           >
-            Next
+            {intl.formatMessage({ id: 'common.next' })}
           </button>
         </div>
       </div>

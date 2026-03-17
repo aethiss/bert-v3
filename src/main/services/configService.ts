@@ -1,5 +1,9 @@
 import type { Database } from 'sqlite';
 import type { AppMode } from '../../shared/types/appMode';
+import {
+  isSupportedLocale,
+  type SupportedLocale
+} from '../../shared/types/language';
 import type {
   ClientConnectionSettings,
   LocalServerSettings
@@ -13,6 +17,7 @@ export const DEFAULT_CONFIG: RuntimeConfig = {
 };
 
 const CONFIG_KEY_MODE = 'app.mode';
+const CONFIG_KEY_LANGUAGE = 'app.language';
 const CONFIG_KEY_API_PORT = 'server.apiPort';
 const CONFIG_KEY_PRINT_FORMAT = 'print.defaultFormat';
 const CONFIG_KEY_PRINT_DISABLED = 'print.disabled';
@@ -32,11 +37,14 @@ const DEFAULT_CLIENT_SERVER_IP = '';
 const DEFAULT_CLIENT_SERVER_PORT = 4860;
 const DEFAULT_CLIENT_OTP = '';
 const DEFAULT_CLIENT_ALIAS = '';
+const DEFAULT_LANGUAGE: SupportedLocale = 'en';
 
 export interface RuntimeConfigService {
   loadRuntimeConfig(): Promise<RuntimeConfig>;
   getApplicationMode(): Promise<AppMode | null>;
   setApplicationMode(mode: AppMode): Promise<AppMode>;
+  getLanguage(): Promise<SupportedLocale>;
+  setLanguage(language: SupportedLocale): Promise<SupportedLocale>;
   getConfigValue(key: string): Promise<string | null>;
   setConfigValue(key: string, value: string): Promise<void>;
   getPrintSettings(): Promise<PrintSettings>;
@@ -75,6 +83,7 @@ export function createRuntimeConfigService(db: Database): RuntimeConfigService {
   }
 
   async function ensureDefaultConfig(): Promise<void> {
+    const language = await getConfigValue(CONFIG_KEY_LANGUAGE);
     const apiPort = await getConfigValue(CONFIG_KEY_API_PORT);
     const printFormat = await getConfigValue(CONFIG_KEY_PRINT_FORMAT);
     const printDisabled = await getConfigValue(CONFIG_KEY_PRINT_DISABLED);
@@ -86,6 +95,9 @@ export function createRuntimeConfigService(db: Database): RuntimeConfigService {
     const clientOtp = await getConfigValue(CONFIG_KEY_CLIENT_OTP);
     const clientAlias = await getConfigValue(CONFIG_KEY_CLIENT_ALIAS);
 
+    if (!isSupportedLocale(language)) {
+      await setConfigValue(CONFIG_KEY_LANGUAGE, DEFAULT_LANGUAGE);
+    }
     if (!apiPort) {
       await setConfigValue(CONFIG_KEY_API_PORT, String(DEFAULT_CONFIG.apiPort));
     }
@@ -137,6 +149,22 @@ export function createRuntimeConfigService(db: Database): RuntimeConfigService {
     }
 
     return null;
+  }
+
+  function toSupportedLocale(raw: string | null): SupportedLocale {
+    return isSupportedLocale(raw) ? raw : DEFAULT_LANGUAGE;
+  }
+
+  async function getLanguage(): Promise<SupportedLocale> {
+    await ensureDefaultConfig();
+    const rawLanguage = await getConfigValue(CONFIG_KEY_LANGUAGE);
+    return toSupportedLocale(rawLanguage);
+  }
+
+  async function setLanguage(language: SupportedLocale): Promise<SupportedLocale> {
+    const normalized = toSupportedLocale(language);
+    await setConfigValue(CONFIG_KEY_LANGUAGE, normalized);
+    return normalized;
   }
 
   async function setApplicationMode(mode: AppMode): Promise<AppMode> {
@@ -277,6 +305,8 @@ export function createRuntimeConfigService(db: Database): RuntimeConfigService {
     loadRuntimeConfig,
     getApplicationMode,
     setApplicationMode,
+    getLanguage,
+    setLanguage,
     getConfigValue,
     setConfigValue,
     getPrintSettings,

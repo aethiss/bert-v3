@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { IntlProvider } from 'react-intl';
 import { useInstallerModeSetup } from '@hooks/useInstallerModeSetup';
 import { InstallerModeModal } from '@ui/components/installer/InstallerModeModal';
 import { DashboardPage } from '@renderer/pages/DashboardPage';
@@ -7,6 +8,7 @@ import { ServerPage } from '@renderer/pages/ServerPage';
 import { ClientPage } from '@renderer/pages/ClientPage';
 import type { ServerRouteState } from '@renderer/components/server/types';
 import type { ExchangeCodeResult } from '@shared/types/ipc/auth';
+import type { SupportedLocale } from '@shared/types/language';
 import {
   parseAppHash,
   toAppHash,
@@ -39,7 +41,9 @@ import {
 } from '@renderer/store/selectors/eligibleSelectors';
 import { showErrorToast } from '@renderer/lib/errorToast';
 import { isRtkLikeError, toErrorMessage } from '@renderer/lib/errorMessage';
-import { getLocalServerStatus } from '@renderer/services/configService';
+import { getLanguage, getLocalServerStatus, saveLanguage } from '@renderer/services/configService';
+import { LocaleContext } from '@renderer/i18n/localeContext';
+import { MESSAGES_BY_LOCALE } from '@renderer/i18n/messages';
 
 export function App() {
   const dispatch = useAppDispatch();
@@ -52,6 +56,8 @@ export function App() {
   const eligibleOverviewSummary = useAppSelector(selectEligibleOverviewSummary);
   const [route, setRoute] = useState<ParsedRoute>(() => parseAppHash(window.location.hash));
   const [isHydratingAuth, setIsHydratingAuth] = useState(true);
+  const [locale, setLocale] = useState<SupportedLocale>('en');
+  const [isHydratingLocale, setIsHydratingLocale] = useState(true);
   const [isSynchronizing, setIsSynchronizing] = useState(false);
   const [isLocalServerRunning, setIsLocalServerRunning] = useState(false);
 
@@ -88,6 +94,37 @@ export function App() {
       mounted = false;
     };
   }, [dispatch, refreshEligibleSummary]);
+
+  useEffect(() => {
+    let mounted = true;
+
+    void getLanguage()
+      .then((persistedLocale) => {
+        if (!mounted) {
+          return;
+        }
+        setLocale(persistedLocale);
+      })
+      .catch((error) => {
+        if (mounted) {
+          showErrorToast(error);
+        }
+      })
+      .finally(() => {
+        if (mounted) {
+          setIsHydratingLocale(false);
+        }
+      });
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    document.documentElement.lang = locale;
+    document.documentElement.dir = locale === 'ar' ? 'rtl' : 'ltr';
+  }, [locale]);
 
   useEffect(() => {
     const onWindowError = (event: ErrorEvent) => {
@@ -218,6 +255,22 @@ export function App() {
     setRoute(next);
   }, [route.client]);
 
+  const handleSetLocale = useCallback(async (nextLocale: SupportedLocale): Promise<void> => {
+    if (nextLocale === locale) {
+      return;
+    }
+
+    const previousLocale = locale;
+    setLocale(nextLocale);
+    try {
+      const persistedLocale = await saveLanguage(nextLocale);
+      setLocale(persistedLocale);
+    } catch (error) {
+      setLocale(previousLocale);
+      throw error;
+    }
+  }, [locale]);
+
   const runOnlineLoginFlow = useCallback(async () => {
     const ciamResult = await openCiamLogin();
 
@@ -295,7 +348,7 @@ export function App() {
   }, [dispatch, isOnline, runOnlineLoginFlow]);
 
   const appContent = useMemo(() => {
-    if (isHydratingAuth || installerModeSetup.isLoading) {
+    if (isHydratingAuth || isHydratingLocale || installerModeSetup.isLoading) {
       return null;
     }
 
@@ -367,6 +420,7 @@ export function App() {
     installerModeSetup.mode,
     isAuthenticated,
     isHydratingAuth,
+    isHydratingLocale,
     isLocalServerRunning,
     isOnline,
     isSynchronizing,
@@ -375,15 +429,24 @@ export function App() {
     synchronizeEligibleData
   ]);
 
+  const localeContextValue = useMemo(() => {
+    return {
+      locale,
+      setLocale: handleSetLocale
+    };
+  }, [handleSetLocale, locale]);
+
   return (
-    <>
-      {appContent}
-      <InstallerModeModal
-        isOpen={!installerModeSetup.isLoading && !installerModeSetup.isLocked}
-        isSubmitting={installerModeSetup.isSubmitting}
-        errorMessage={installerModeSetup.errorMessage}
-        onConfirm={installerModeSetup.setMode}
-      />
-    </>
+    <IntlProvider locale={locale} messages={MESSAGES_BY_LOCALE[locale]} defaultLocale="en">
+      <LocaleContext.Provider value={localeContextValue}>
+        {appContent}
+        <InstallerModeModal
+          isOpen={!installerModeSetup.isLoading && !installerModeSetup.isLocked}
+          isSubmitting={installerModeSetup.isSubmitting}
+          errorMessage={installerModeSetup.errorMessage}
+          onConfirm={installerModeSetup.setMode}
+        />
+      </LocaleContext.Provider>
+    </IntlProvider>
   );
 }

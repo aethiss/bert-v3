@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { ExternalLink, ScanLine, Search } from 'lucide-react';
+import { useIntl } from 'react-intl';
 import { toast } from 'sonner';
 import { Button } from '@ui/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -19,16 +20,17 @@ import { DistributionPrintPreview } from '@renderer/components/server/prints/Dis
 import { hideMiddleNumbers } from '@renderer/components/server/prints/receiptHelpers';
 import type { ReceiptPayload } from '@renderer/components/server/prints/types';
 
-function toPrincipleFlag(role: string | null): 'true' | 'false' {
+function isPrincipleRole(role: string | null): boolean {
   const normalized = (role ?? '').trim().toLowerCase();
-  return normalized === 'principle' || normalized === 'principal' ? 'true' : 'false';
+  return normalized === 'principle' || normalized === 'principal';
 }
 
-function asAgeLabel(age: number | null): string {
-  return typeof age === 'number' ? String(age) : 'N/A';
+function asAgeLabel(age: number | null, fallback: string): string {
+  return typeof age === 'number' ? String(age) : fallback;
 }
 
 export function Distribution({ route, onNavigate }: ServerRouteComponentProps) {
+  const intl = useIntl();
   const currentUser = useAppSelector(selectCurrentUser);
   const [query, setQuery] = useState('');
   const [isScanModeActive, setIsScanModeActive] = useState(false);
@@ -86,15 +88,18 @@ export function Distribution({ route, onNavigate }: ServerRouteComponentProps) {
 
       const parsedDocumentId = parseDocumentIdFromPdf417Payload(payload);
       if (!parsedDocumentId) {
-        toast.error('Scan failed', {
-          description: 'Unable to extract Document ID from scanned barcode payload.'
+        toast.error(intl.formatMessage({ id: 'distribution.scanFailedTitle' }), {
+          description: intl.formatMessage({ id: 'distribution.scanFailedDescription' })
         });
         return;
       }
 
       setQuery(parsedDocumentId);
-      toast.success('Document scanned', {
-        description: `Document ID ${parsedDocumentId} extracted.`
+      toast.success(intl.formatMessage({ id: 'distribution.documentScannedTitle' }), {
+        description: intl.formatMessage(
+          { id: 'distribution.documentScannedDescription' },
+          { documentId: parsedDocumentId }
+        )
       });
     };
 
@@ -104,7 +109,7 @@ export function Distribution({ route, onNavigate }: ServerRouteComponentProps) {
         scanBufferRef.current = '';
         clearTimer();
         setIsScanModeActive(false);
-        toast.message('Scan cancelled');
+        toast.message(intl.formatMessage({ id: 'distribution.scanCancelled' }));
         return;
       }
 
@@ -131,7 +136,7 @@ export function Distribution({ route, onNavigate }: ServerRouteComponentProps) {
       window.removeEventListener('keydown', onKeyDown, true);
       clearTimer();
     };
-  }, [isScanModeActive, route.distributionMode]);
+  }, [intl, isScanModeActive, route.distributionMode]);
 
   const handleSearch = async (): Promise<void> => {
     const normalized = query.trim();
@@ -181,8 +186,8 @@ export function Distribution({ route, onNavigate }: ServerRouteComponentProps) {
       });
 
       if (!detailData) {
-        toast.error('Error', {
-          description: 'Unable to load household details for distribution.'
+        toast.error(intl.formatMessage({ id: 'common.error' }), {
+          description: intl.formatMessage({ id: 'distribution.loadDetailError' })
         });
         return;
       }
@@ -211,8 +216,8 @@ export function Distribution({ route, onNavigate }: ServerRouteComponentProps) {
 
   const handleConfirm = async (): Promise<void> => {
     if (!detail || selectedCycleCode === null || selectedMemberId === null || !selectedMember) {
-      toast.error('Error', {
-        description: 'Select a cycle and a collector member before confirming.'
+      toast.error(intl.formatMessage({ id: 'common.error' }), {
+        description: intl.formatMessage({ id: 'distribution.selectCycleError' })
       });
       return;
     }
@@ -221,15 +226,15 @@ export function Distribution({ route, onNavigate }: ServerRouteComponentProps) {
     const mainOperatorFDP = (currentUser?.fdp ?? '').trim();
 
     if (!Number.isFinite(mainOperator ?? null)) {
-      toast.error('Error', {
-        description: 'Missing logged user id. Please login again.'
+      toast.error(intl.formatMessage({ id: 'common.error' }), {
+        description: intl.formatMessage({ id: 'distribution.missingUserIdError' })
       });
       return;
     }
 
     if (!mainOperatorFDP) {
-      toast.error('Error', {
-        description: 'Missing logged user FDP. Please login again.'
+      toast.error(intl.formatMessage({ id: 'common.error' }), {
+        description: intl.formatMessage({ id: 'distribution.missingUserFdpError' })
       });
       return;
     }
@@ -240,8 +245,8 @@ export function Distribution({ route, onNavigate }: ServerRouteComponentProps) {
       Boolean(selectedMember.documentNumber) && normalizedVerify === String(selectedMember.documentNumber);
 
     if (!matchesFamilyCode && !matchesDocumentId) {
-      toast.error('Error', {
-        description: 'Verification failed. Use FamilyUniqueCode or selected member Document ID.'
+      toast.error(intl.formatMessage({ id: 'common.error' }), {
+        description: intl.formatMessage({ id: 'distribution.verificationFailedError' })
       });
       return;
     }
@@ -268,8 +273,8 @@ export function Distribution({ route, onNavigate }: ServerRouteComponentProps) {
       setVerifyInput('');
       const printSettings = await getPrintSettings();
       if (printSettings.disabled) {
-        toast.success('Saved', {
-          description: 'Distribution saved locally.'
+        toast.success(intl.formatMessage({ id: 'common.saved' }), {
+          description: intl.formatMessage({ id: 'distribution.savedLocalDescription' })
         });
         onNavigate({
           ...route,
@@ -280,11 +285,11 @@ export function Distribution({ route, onNavigate }: ServerRouteComponentProps) {
       }
 
       setPrintPreviewPayload({
-        title: 'Beneficiary Distribution Receipt',
+        title: intl.formatMessage({ id: 'distribution.receiptTitle' }),
         headOfHousehold: detail.household.principle || selectedMember.fullName,
         receiptId: '1234567890',
         householdId: String(detail.household.familyUniqueCode),
-        fdp: currentUser?.fdp ?? 'N/A',
+        fdp: currentUser?.fdp ?? intl.formatMessage({ id: 'common.na' }),
         collectedBy: hideMiddleNumbers(selectedMember.documentNumber ?? String(selectedMember.memberId)),
         printedAtIso: new Date().toISOString(),
         cycles: selectedCycle
@@ -301,10 +306,9 @@ export function Distribution({ route, onNavigate }: ServerRouteComponentProps) {
     } catch (error) {
       const message = error instanceof Error ? error.message : '';
       if (message.toLowerCase().includes('duplicate distribution blocked')) {
-        const visibleMessage =
-          'Distribution already recorded for this family in the selected cycle. Choose another cycle.';
+        const visibleMessage = intl.formatMessage({ id: 'distribution.blockedDescription' });
         setBlockingMessage(visibleMessage);
-        toast.error('Distribution blocked', {
+        toast.error(intl.formatMessage({ id: 'distribution.blockedTitle' }), {
           description: visibleMessage
         });
         return;
@@ -317,15 +321,15 @@ export function Distribution({ route, onNavigate }: ServerRouteComponentProps) {
 
   return (
     <section className="server-content-block">
-      <h1 className="server-page-title">Distribution</h1>
+      <h1 className="server-page-title">{intl.formatMessage({ id: 'distribution.title' })}</h1>
       {blockingMessage ? <div className="distribution-blocking-alert">{blockingMessage}</div> : null}
 
       {route.distributionMode !== 'detail' ? (
         <>
-          <p className="server-label">Search&nbsp;&nbsp;Household</p>
+          <p className="server-label">{intl.formatMessage({ id: 'distribution.searchHousehold' })}</p>
           <div className="distribution-search-row">
             <Input
-              aria-label="Household search"
+              aria-label={intl.formatMessage({ id: 'distribution.householdSearchAria' })}
               className="distribution-search-input"
               inputMode="numeric"
               pattern="[0-9]*"
@@ -339,7 +343,7 @@ export function Distribution({ route, onNavigate }: ServerRouteComponentProps) {
                   void handleSearch();
                 }
               }}
-              placeholder="FamilyUniqueCode or documentNumber (numeric)"
+              placeholder={intl.formatMessage({ id: 'distribution.searchPlaceholder' })}
             />
             <Button
               className="server-btn distribution-search-btn"
@@ -347,7 +351,9 @@ export function Distribution({ route, onNavigate }: ServerRouteComponentProps) {
               disabled={isSearching}
             >
               <Search className="distribution-btn-icon" />
-              {isSearching ? 'Searching...' : 'Search'}
+              {isSearching
+                ? intl.formatMessage({ id: 'distribution.searching' })
+                : intl.formatMessage({ id: 'distribution.search' })}
             </Button>
             <Button
               className={`server-btn distribution-search-btn distribution-scan-btn${
@@ -367,34 +373,40 @@ export function Distribution({ route, onNavigate }: ServerRouteComponentProps) {
 
                 scanBufferRef.current = '';
                 setIsScanModeActive(true);
-                toast.message('Scanner listening', {
-                  description: 'Scan barcode now. Press Esc to cancel.'
+                toast.message(intl.formatMessage({ id: 'distribution.scanListeningTitle' }), {
+                  description: intl.formatMessage({ id: 'distribution.scanListeningDescription' })
                 });
               }}
               disabled={isSearching}
             >
               <ScanLine className="distribution-btn-icon" />
-              {isScanModeActive ? 'Cancel Scan' : 'Scan Document'}
+              {isScanModeActive
+                ? intl.formatMessage({ id: 'distribution.cancelScan' })
+                : intl.formatMessage({ id: 'distribution.scanDocument' })}
             </Button>
           </div>
 
           {route.distributionMode === 'result' && result ? (
-            <table className="distribution-table" aria-label="Distribution results">
+            <table className="distribution-table" aria-label={intl.formatMessage({ id: 'distribution.resultsAria' })}>
               <thead>
                 <tr>
-                  <th>UUID</th>
-                  <th>Principle</th>
-                  <th>Phone</th>
-                  <th>Address</th>
-                  <th>Actions</th>
+                  <th>{intl.formatMessage({ id: 'table.uuid' })}</th>
+                  <th>{intl.formatMessage({ id: 'table.principle' })}</th>
+                  <th>{intl.formatMessage({ id: 'table.phone' })}</th>
+                  <th>{intl.formatMessage({ id: 'table.address' })}</th>
+                  <th>{intl.formatMessage({ id: 'table.actions' })}</th>
                 </tr>
               </thead>
               <tbody>
                 <tr>
                   <td>{result.member.id}</td>
-                  <td>{toPrincipleFlag(result.member.role)}</td>
-                  <td>N/A</td>
-                  <td>N/A</td>
+                  <td>
+                    {isPrincipleRole(result.member.role)
+                      ? intl.formatMessage({ id: 'common.yes' })
+                      : intl.formatMessage({ id: 'common.no' })}
+                  </td>
+                  <td>{intl.formatMessage({ id: 'common.na' })}</td>
+                  <td>{intl.formatMessage({ id: 'common.na' })}</td>
                   <td className="distribution-action-cell">
                     <div className="distribution-action-content">
                       <button
@@ -403,7 +415,9 @@ export function Distribution({ route, onNavigate }: ServerRouteComponentProps) {
                         onClick={() => void handleOpenDetail()}
                         disabled={isLoadingDetail}
                       >
-                        {isLoadingDetail ? 'Loading...' : 'Distribute'}
+                        {isLoadingDetail
+                          ? intl.formatMessage({ id: 'common.loading' })
+                          : intl.formatMessage({ id: 'distribution.distribute' })}
                       </button>
                       <ExternalLink size={14} />
                     </div>
@@ -414,7 +428,7 @@ export function Distribution({ route, onNavigate }: ServerRouteComponentProps) {
           ) : null}
 
           {hasSearched && !result ? (
-            <p className="distribution-empty">No eligible members found for the provided search value.</p>
+            <p className="distribution-empty">{intl.formatMessage({ id: 'distribution.emptySearch' })}</p>
           ) : null}
         </>
       ) : null}
@@ -422,60 +436,60 @@ export function Distribution({ route, onNavigate }: ServerRouteComponentProps) {
       {route.distributionMode === 'detail' && detail ? (
         <section className="distribution-detail-layout">
           <aside className="distribution-detail-sidebar">
-            <p className="distribution-detail-section-title">Household Info</p>
+            <p className="distribution-detail-section-title">{intl.formatMessage({ id: 'distribution.householdInfo' })}</p>
             <dl className="distribution-info-list">
               <div>
-                <dt>IDM ID</dt>
+                <dt>{intl.formatMessage({ id: 'distribution.idmId' })}</dt>
                 <dd>{detail.household.idmId}</dd>
               </div>
               <div>
-                <dt>Booklet</dt>
+                <dt>{intl.formatMessage({ id: 'distribution.booklet' })}</dt>
                 <dd>{detail.household.booklet}</dd>
               </div>
               <div>
-                <dt>Principle</dt>
+                <dt>{intl.formatMessage({ id: 'distribution.principle' })}</dt>
                 <dd>{detail.household.principle}</dd>
               </div>
               <div>
-                <dt>Phone</dt>
+                <dt>{intl.formatMessage({ id: 'distribution.phone' })}</dt>
                 <dd>{detail.household.phone}</dd>
               </div>
               <div>
-                <dt>Registration Date</dt>
+                <dt>{intl.formatMessage({ id: 'distribution.registrationDate' })}</dt>
                 <dd>{detail.household.registrationDate}</dd>
               </div>
               <div>
-                <dt>PBWGs</dt>
+                <dt>{intl.formatMessage({ id: 'distribution.pbwgs' })}</dt>
                 <dd>{detail.household.pbwgs}</dd>
               </div>
               <div>
-                <dt>Children 6-23</dt>
+                <dt>{intl.formatMessage({ id: 'distribution.children623' })}</dt>
                 <dd>{detail.household.children623}</dd>
               </div>
             </dl>
 
             <div className="distribution-sidebar-actions">
-              <p className="distribution-detail-section-title">Actions</p>
+              <p className="distribution-detail-section-title">{intl.formatMessage({ id: 'distribution.actionsSection' })}</p>
               <button type="button" className="distribution-link-action" disabled>
-                Distribution History
+                {intl.formatMessage({ id: 'distribution.distributionHistory' })}
               </button>
               <button type="button" className="distribution-link-action" disabled>
-                Reprint
+                {intl.formatMessage({ id: 'distribution.reprint' })}
               </button>
             </div>
           </aside>
 
           <section className="distribution-detail-main">
-            <p className="distribution-detail-section-title">Active Cycles</p>
+            <p className="distribution-detail-section-title">{intl.formatMessage({ id: 'distribution.activeCycles' })}</p>
             <table className="distribution-detail-table">
               <thead>
                 <tr>
-                  <th>Collector</th>
-                  <th>Cycle Name</th>
-                  <th>Assistance Type</th>
-                  <th>Quantity</th>
-                  <th>Start Date</th>
-                  <th>End Date</th>
+                  <th>{intl.formatMessage({ id: 'table.collector' })}</th>
+                  <th>{intl.formatMessage({ id: 'table.cycleName' })}</th>
+                  <th>{intl.formatMessage({ id: 'table.assistanceType' })}</th>
+                  <th>{intl.formatMessage({ id: 'table.quantity' })}</th>
+                  <th>{intl.formatMessage({ id: 'table.startDate' })}</th>
+                  <th>{intl.formatMessage({ id: 'table.endDate' })}</th>
                 </tr>
               </thead>
               <tbody>
@@ -505,14 +519,14 @@ export function Distribution({ route, onNavigate }: ServerRouteComponentProps) {
               </tbody>
             </table>
 
-            <p className="distribution-detail-section-title">Household Members</p>
+            <p className="distribution-detail-section-title">{intl.formatMessage({ id: 'distribution.householdMembers' })}</p>
             <table className="distribution-detail-table">
               <thead>
                 <tr>
-                  <th>Collector</th>
-                  <th>Name</th>
-                  <th>ID</th>
-                  <th>Age</th>
+                  <th>{intl.formatMessage({ id: 'table.collector' })}</th>
+                  <th>{intl.formatMessage({ id: 'table.name' })}</th>
+                  <th>{intl.formatMessage({ id: 'table.id' })}</th>
+                  <th>{intl.formatMessage({ id: 'table.age' })}</th>
                 </tr>
               </thead>
               <tbody>
@@ -530,20 +544,20 @@ export function Distribution({ route, onNavigate }: ServerRouteComponentProps) {
                     </td>
                     <td>{member.fullName}</td>
                     <td>{member.documentNumber ?? member.memberId}</td>
-                    <td>{asAgeLabel(member.age)}</td>
+                    <td>{asAgeLabel(member.age, intl.formatMessage({ id: 'common.na' }))}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
 
-            <p className="distribution-detail-section-title">Notes</p>
+            <p className="distribution-detail-section-title">{intl.formatMessage({ id: 'distribution.notes' })}</p>
             <textarea
               className="distribution-notes"
               value={notes}
               onChange={(event) => {
                 setNotes(event.target.value);
               }}
-              placeholder="Type Notes Here"
+              placeholder={intl.formatMessage({ id: 'distribution.notesPlaceholder' })}
               rows={4}
             />
 
@@ -555,7 +569,7 @@ export function Distribution({ route, onNavigate }: ServerRouteComponentProps) {
                 }}
                 disabled={selectedCycleCode === null || selectedMemberId === null}
               >
-                Confirm
+                {intl.formatMessage({ id: 'actions.confirm' })}
               </Button>
               <Button
                 variant="outline"
@@ -568,7 +582,7 @@ export function Distribution({ route, onNavigate }: ServerRouteComponentProps) {
                   });
                 }}
               >
-                Cancel
+                {intl.formatMessage({ id: 'common.cancel' })}
               </Button>
             </div>
           </section>
@@ -578,14 +592,14 @@ export function Distribution({ route, onNavigate }: ServerRouteComponentProps) {
       {isVerifyModalOpen ? (
         <div className="distribution-modal-backdrop" role="presentation">
           <div className="distribution-modal" role="dialog" aria-modal="true">
-            <h2>Confirm Distribution</h2>
-            <p>Type FamilyUniqueCode or selected member Document ID to confirm.</p>
+            <h2>{intl.formatMessage({ id: 'distribution.confirmDistributionTitle' })}</h2>
+            <p>{intl.formatMessage({ id: 'distribution.confirmDistributionDescription' })}</p>
             <Input
               value={verifyInput}
               onChange={(event) => {
                 setVerifyInput(event.target.value);
               }}
-              placeholder="FamilyUniqueCode or Document ID"
+              placeholder={intl.formatMessage({ id: 'distribution.verifyPlaceholder' })}
             />
             <div className="distribution-modal-actions">
               <Button
@@ -593,7 +607,9 @@ export function Distribution({ route, onNavigate }: ServerRouteComponentProps) {
                 onClick={() => void handleConfirm()}
                 disabled={isSavingDistribution}
               >
-                {isSavingDistribution ? 'Saving...' : 'Confirm'}
+                {isSavingDistribution
+                  ? intl.formatMessage({ id: 'common.saving' })
+                  : intl.formatMessage({ id: 'actions.confirm' })}
               </Button>
               <Button
                 variant="outline"
@@ -604,7 +620,7 @@ export function Distribution({ route, onNavigate }: ServerRouteComponentProps) {
                 }}
                 disabled={isSavingDistribution}
               >
-                Cancel
+                {intl.formatMessage({ id: 'common.cancel' })}
               </Button>
             </div>
           </div>
@@ -623,8 +639,8 @@ export function Distribution({ route, onNavigate }: ServerRouteComponentProps) {
             });
           }}
           onPrinted={() => {
-            toast.success('Printed', {
-              description: 'Receipt printed successfully.'
+            toast.success(intl.formatMessage({ id: 'distribution.printedTitle' }), {
+              description: intl.formatMessage({ id: 'distribution.printedDescription' })
             });
             setPrintPreviewPayload(null);
             onNavigate({

@@ -6,6 +6,7 @@
     "jsx": "react-jsx",
     "types": ["vite/client"],
     "moduleResolution": "Bundler",
+    "resolveJsonModule": true,
     "noEmit": true,
     "baseUrl": ".",
     "paths": {

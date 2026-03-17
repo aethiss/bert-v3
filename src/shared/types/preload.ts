@@ -21,6 +21,7 @@ import type {
 import type { OperationsDashboard, OperationsDashboardQuery } from './operations';
 import type { PrintSettings } from './printConfig';
 import type { PersistedUserProfile, UserInfoApiModel } from './user';
+import type { SupportedLocale } from './language';
 
 export interface BertAppApi {
   version: string;
@@ -39,6 +40,8 @@ export interface BertAppApi {
   config: {
     getPrintSettings(): Promise<PrintSettings>;
     setPrintSettings(settings: PrintSettings): Promise<PrintSettings>;
+    getLanguage(): Promise<SupportedLocale>;
+    setLanguage(language: SupportedLocale): Promise<SupportedLocale>;
     getServerInterfaces(): Promise<LocalServerInterfaceInfo[]>;
     getLocalServerSettings(): Promise<LocalServerSettings>;
     setLocalServerSettings(settings: LocalServerSettings): Promise<LocalServerSettings>;

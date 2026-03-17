@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useIntl } from 'react-intl';
 import { toast } from 'sonner';
 import { TopNavigation } from '@renderer/components/client/common/TopNavigation';
 import { resolveClientNavItems } from '@renderer/components/client/navigation/navigation';
@@ -28,6 +29,7 @@ const DEFAULT_CONNECTION_SETTINGS: ClientConnectionSettings = {
 };
 
 export function ClientPage({ route, onNavigate }: ClientPageProps) {
+  const intl = useIntl();
   const [settings, setSettings] = useState<ClientConnectionSettings>(DEFAULT_CONNECTION_SETTINGS);
   const [session, setSession] = useState<ClientSession | null>(null);
   const [isSubmittingConnection, setIsSubmittingConnection] = useState(false);
@@ -92,8 +94,11 @@ export function ClientPage({ route, onNavigate }: ClientPageProps) {
       const nextSession = await loginToLocalServer(normalized);
       await saveClientConnectionSettings(normalized);
       setSession(nextSession);
-      toast.success('Connected', {
-        description: `Connected to host ${nextSession.host}`
+      toast.success(intl.formatMessage({ id: 'config.connection.connected' }), {
+        description: intl.formatMessage(
+          { id: 'config.connection.connectedDescription' },
+          { host: nextSession.host }
+        )
       });
 
       if (route.section === 'configuration') {
@@ -107,14 +112,14 @@ export function ClientPage({ route, onNavigate }: ClientPageProps) {
     } finally {
       setIsSubmittingConnection(false);
     }
-  }, [onNavigate, route, settings]);
+  }, [intl, onNavigate, route, settings]);
 
   const handleDisconnect = useCallback(() => {
     setSession(null);
-    toast.success('Disconnected', {
-      description: 'Client session closed.'
+    toast.success(intl.formatMessage({ id: 'config.connection.disconnected' }), {
+      description: intl.formatMessage({ id: 'config.connection.disconnectedDescription' })
     });
-  }, []);
+  }, [intl]);
 
   const content = useMemo(() => {
     if (route.section === 'distribution') {

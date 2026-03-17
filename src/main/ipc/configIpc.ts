@@ -7,12 +7,15 @@ import type {
 } from '../../shared/types/localServer';
 import type { OperationsDashboardQuery } from '../../shared/types/operations';
 import type { PrintSettings } from '../../shared/types/printConfig';
+import type { SupportedLocale } from '../../shared/types/language';
 import type { RuntimeConfigService } from '../services/configService';
 import type { LocalApiServer } from '../server/localApiServer';
 import type { EligibleDataService } from '../services/eligibleDataService';
 
 const CHANNEL_GET_PRINT_SETTINGS = 'config:getPrintSettings';
 const CHANNEL_SET_PRINT_SETTINGS = 'config:setPrintSettings';
+const CHANNEL_GET_LANGUAGE = 'config:getLanguage';
+const CHANNEL_SET_LANGUAGE = 'config:setLanguage';
 const CHANNEL_GET_SERVER_INTERFACES = 'config:getServerInterfaces';
 const CHANNEL_GET_LOCAL_SERVER_SETTINGS = 'config:getLocalServerSettings';
 const CHANNEL_SET_LOCAL_SERVER_SETTINGS = 'config:setLocalServerSettings';
@@ -63,6 +66,8 @@ export function registerConfigIpc(
 ): void {
   ipcMain.removeHandler(CHANNEL_GET_PRINT_SETTINGS);
   ipcMain.removeHandler(CHANNEL_SET_PRINT_SETTINGS);
+  ipcMain.removeHandler(CHANNEL_GET_LANGUAGE);
+  ipcMain.removeHandler(CHANNEL_SET_LANGUAGE);
   ipcMain.removeHandler(CHANNEL_GET_SERVER_INTERFACES);
   ipcMain.removeHandler(CHANNEL_GET_LOCAL_SERVER_SETTINGS);
   ipcMain.removeHandler(CHANNEL_SET_LOCAL_SERVER_SETTINGS);
@@ -80,6 +85,14 @@ export function registerConfigIpc(
 
   ipcMain.handle(CHANNEL_SET_PRINT_SETTINGS, async (_event, settings: PrintSettings) => {
     return configService.setPrintSettings(settings);
+  });
+
+  ipcMain.handle(CHANNEL_GET_LANGUAGE, async () => {
+    return configService.getLanguage();
+  });
+
+  ipcMain.handle(CHANNEL_SET_LANGUAGE, async (_event, language: SupportedLocale) => {
+    return configService.setLanguage(language);
   });
 
   ipcMain.handle(CHANNEL_GET_SERVER_INTERFACES, async () => {

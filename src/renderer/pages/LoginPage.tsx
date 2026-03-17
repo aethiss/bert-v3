@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { useIntl } from 'react-intl';
 import { openCiamLogin } from '@services/authService';
 import { useLazyExchangeCodeQuery, useLazyGetUserInfoQuery } from '@renderer/store/api/authApi';
 import { useAppDispatch } from '@renderer/store/hooks';
@@ -8,6 +9,7 @@ import { isRtkLikeError, toErrorMessage } from '@renderer/lib/errorMessage';
 import { showErrorToast } from '@renderer/lib/errorToast';
 
 export function LoginPage() {
+  const intl = useIntl();
   const dispatch = useAppDispatch();
   const [triggerExchangeCode, exchangeCodeState] = useLazyExchangeCodeQuery();
   const [triggerUserInfo, userInfoState] = useLazyGetUserInfoQuery();
@@ -18,19 +20,19 @@ export function LoginPage() {
 
   const actionLabel = useMemo(() => {
     if (isOpeningCiamWindow) {
-      return 'Opening CIAM...';
+      return intl.formatMessage({ id: 'login.openingCiam' });
     }
 
     if (exchangeCodeState.isFetching) {
-      return 'Validating token...';
+      return intl.formatMessage({ id: 'login.validatingToken' });
     }
 
     if (userInfoState.isFetching) {
-      return 'Loading user profile...';
+      return intl.formatMessage({ id: 'login.loadingUserProfile' });
     }
 
-    return 'Login with CIAM';
-  }, [exchangeCodeState.isFetching, isOpeningCiamWindow, userInfoState.isFetching]);
+    return intl.formatMessage({ id: 'login.withCiam' });
+  }, [exchangeCodeState.isFetching, intl, isOpeningCiamWindow, userInfoState.isFetching]);
 
   const handleLogin = async (): Promise<void> => {
     setErrorMessage(null);
@@ -72,30 +74,27 @@ export function LoginPage() {
 
   return (
     <main className="login-page">
-      <section className="login-shell" aria-label="Login layout">
+      <section className="login-shell" aria-label={intl.formatMessage({ id: 'login.layoutAria' })}>
         <aside className="login-left-panel">
           <div className="login-brand">
             <img
               className="login-brand-logo"
               src="https://uikit.wfp.org/cdn/logos/latest/wfp-logo-emblem-white-all.svg"
-              alt="World Food Programme"
+              alt={intl.formatMessage({ id: 'brand.wfp' })}
             />
-            <p className="login-brand-text">World Food Programme</p>
+            <p className="login-brand-text">{intl.formatMessage({ id: 'brand.wfp' })}</p>
           </div>
 
           <blockquote className="login-quote">
-            <p>
-              This library has saved me countless hours of work and helped me deliver stunning designs to
-              my clients faster than ever before.
-            </p>
-            <footer>Sofia Davis</footer>
+            <p>{intl.formatMessage({ id: 'login.quote' })}</p>
+            <footer>{intl.formatMessage({ id: 'login.quoteAuthor' })}</footer>
           </blockquote>
         </aside>
 
         <section className="login-right-panel">
           <div className="login-form-container">
-            <h1>Welcome to BeRT</h1>
-            <p>Enter your email below to login</p>
+            <h1>{intl.formatMessage({ id: 'login.welcome' })}</h1>
+            <p>{intl.formatMessage({ id: 'login.subtitle' })}</p>
             <Button
               onClick={() => void handleLogin()}
               className="login-submit-button"

@@ -43,6 +43,7 @@ function parseServerRoute(segments: string[]): ServerRouteState {
       rawTab === 'server' ||
       rawTab === 'printer' ||
       rawTab === 'log' ||
+      rawTab === 'language' ||
       rawTab === 'developer'
         ? rawTab
         : 'server';

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useIntl } from 'react-intl';
 import { Server as ServerIcon, Square as StopIcon } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -22,6 +23,7 @@ import type {
   ServerRouteState,
   ServerRouteComponentProps
 } from '@renderer/components/server/types';
+import { LanguageSettings } from '@renderer/components/server/configuration/LanguageSettings';
 import type { AppMode } from '@shared/types/appMode';
 import type { LocalServerInterfaceInfo, LocalServerSettings } from '@shared/types/localServer';
 import type { PrintFormat } from '@shared/types/printConfig';
@@ -43,6 +45,7 @@ function toInterfaceOptionValue(networkInterface: LocalServerInterfaceInfo): str
 }
 
 export function Configuration({ route, onNavigate }: ServerRouteComponentProps) {
+  const intl = useIntl();
   const [printFormat, setPrintFormat] = useState<PrintFormat>('A5');
   const [printDisabled, setPrintDisabled] = useState(false);
   const [isLoadingPrintSettings, setIsLoadingPrintSettings] = useState(false);
@@ -168,8 +171,8 @@ export function Configuration({ route, onNavigate }: ServerRouteComponentProps) 
         format: printFormat,
         disabled: printDisabled
       });
-      toast.success('Saved', {
-        description: 'Printing configuration updated.'
+      toast.success(intl.formatMessage({ id: 'common.saved' }), {
+        description: intl.formatMessage({ id: 'config.printer.updatedDescription' })
       });
     } catch (error) {
       showErrorToast(error);
@@ -187,8 +190,8 @@ export function Configuration({ route, onNavigate }: ServerRouteComponentProps) 
       };
       const saved = await saveLocalServerSettings(nextSettings);
       setServerSettings(saved);
-      toast.success('Saved', {
-        description: 'Server configuration updated.'
+      toast.success(intl.formatMessage({ id: 'common.saved' }), {
+        description: intl.formatMessage({ id: 'config.server.updatedDescription' })
       });
     } catch (error) {
       showErrorToast(error);
@@ -205,8 +208,8 @@ export function Configuration({ route, onNavigate }: ServerRouteComponentProps) 
         setIsServerRunning(status.running);
         setActiveClientCount(status.activeClients);
         window.dispatchEvent(new Event('local-server-status-updated'));
-        toast.success('Stopped', {
-          description: 'Local server has been stopped.'
+        toast.success(intl.formatMessage({ id: 'config.server.stop' }), {
+          description: intl.formatMessage({ id: 'config.server.stoppedDescription' })
         });
         return;
       }
@@ -218,8 +221,11 @@ export function Configuration({ route, onNavigate }: ServerRouteComponentProps) 
       setIsServerRunning(status.running);
       setActiveClientCount(status.activeClients);
       window.dispatchEvent(new Event('local-server-status-updated'));
-      toast.success('Running', {
-        description: `Local server is listening on ${status.bindIp}:${status.port}.`
+      toast.success(intl.formatMessage({ id: 'config.server.running' }), {
+        description: intl.formatMessage(
+          { id: 'config.server.runningDescription' },
+          { bindIp: status.bindIp, port: status.port }
+        )
       });
     } catch (error) {
       showErrorToast(error);
@@ -234,8 +240,8 @@ export function Configuration({ route, onNavigate }: ServerRouteComponentProps) 
       await resetDatabaseForDevelopment();
       window.dispatchEvent(new Event('distribution-queue-updated'));
       window.dispatchEvent(new Event('local-server-status-updated'));
-      toast.success('Database reset', {
-        description: 'All local data has been cleared.'
+      toast.success(intl.formatMessage({ id: 'common.reset' }), {
+        description: intl.formatMessage({ id: 'config.databaseReset.description' })
       });
       setIsResetConfirmOpen(false);
     } catch (error) {
@@ -247,7 +253,7 @@ export function Configuration({ route, onNavigate }: ServerRouteComponentProps) 
 
   return (
     <section className="server-content-block">
-      <h1 className="server-page-title">Configuration</h1>
+      <h1 className="server-page-title">{intl.formatMessage({ id: 'config.title' })}</h1>
       <div className="configuration-layout">
         <aside className="configuration-sidebar">
           <button
@@ -255,35 +261,42 @@ export function Configuration({ route, onNavigate }: ServerRouteComponentProps) 
             className={route.configurationTab === 'server' ? 'configuration-tab active' : 'configuration-tab'}
             onClick={() => navigateToConfigurationTab(route, onNavigate, 'server')}
           >
-            Server
+            {intl.formatMessage({ id: 'config.tabs.server' })}
           </button>
           <button
             type="button"
             className={route.configurationTab === 'printer' ? 'configuration-tab active' : 'configuration-tab'}
             onClick={() => navigateToConfigurationTab(route, onNavigate, 'printer')}
           >
-            Printer
+            {intl.formatMessage({ id: 'config.tabs.printer' })}
           </button>
           <button
             type="button"
             className={route.configurationTab === 'log' ? 'configuration-tab active' : 'configuration-tab'}
             onClick={() => navigateToConfigurationTab(route, onNavigate, 'log')}
           >
-            Log
+            {intl.formatMessage({ id: 'config.tabs.log' })}
+          </button>
+          <button
+            type="button"
+            className={route.configurationTab === 'language' ? 'configuration-tab active' : 'configuration-tab'}
+            onClick={() => navigateToConfigurationTab(route, onNavigate, 'language')}
+          >
+            {intl.formatMessage({ id: 'config.tabs.language' })}
           </button>
           <button
             type="button"
             className={route.configurationTab === 'developer' ? 'configuration-tab active' : 'configuration-tab'}
             onClick={() => navigateToConfigurationTab(route, onNavigate, 'developer')}
           >
-            Developer
+            {intl.formatMessage({ id: 'config.tabs.developer' })}
           </button>
         </aside>
 
         {route.configurationTab === 'server' ? (
           <div className="configuration-form">
             <label className="server-form-label">
-              Interface
+              {intl.formatMessage({ id: 'config.server.interface' })}
               <Select
                 className="server-form-control"
                 value={selectedInterfaceValue}
@@ -309,14 +322,16 @@ export function Configuration({ route, onNavigate }: ServerRouteComponentProps) 
             </label>
 
             <div className="server-form-display">
-              <p className="server-form-label">IP Address</p>
-              <p className="server-form-muted">{serverSettings.bindIp || 'N/A'}</p>
+              <p className="server-form-label">{intl.formatMessage({ id: 'config.server.ipAddress' })}</p>
+              <p className="server-form-muted">
+                {serverSettings.bindIp || intl.formatMessage({ id: 'common.na' })}
+              </p>
             </div>
 
             <hr className="server-divider" />
 
             <label className="server-form-label">
-              Port
+              {intl.formatMessage({ id: 'config.server.port' })}
               <Input
                 className="server-form-control"
                 inputMode="numeric"
@@ -333,7 +348,7 @@ export function Configuration({ route, onNavigate }: ServerRouteComponentProps) 
             </label>
 
             <label className="server-form-label">
-              One Time Password
+              {intl.formatMessage({ id: 'config.server.otp' })}
               <Input
                 className="server-form-control"
                 value={serverSettings.oneTimePassword}
@@ -348,9 +363,22 @@ export function Configuration({ route, onNavigate }: ServerRouteComponentProps) 
             </label>
 
             <p className="server-form-muted">
-              Status: {isServerRunning ? 'Running' : 'Stopped'} | Connected clients: {activeClientCount}
+              {intl.formatMessage(
+                { id: 'config.server.statusLine' },
+                {
+                  status: isServerRunning
+                    ? intl.formatMessage({ id: 'config.server.running' })
+                    : intl.formatMessage({ id: 'config.server.stopped' }),
+                  activeClients: activeClientCount
+                }
+              )}
             </p>
-            <p className="server-form-muted">App Mode: {appMode ?? 'N/A'}</p>
+            <p className="server-form-muted">
+              {intl.formatMessage(
+                { id: 'config.server.appModeLine' },
+                { mode: appMode ?? intl.formatMessage({ id: 'common.na' }) }
+              )}
+            </p>
 
             <div className="configuration-server-actions">
               <Button
@@ -358,7 +386,9 @@ export function Configuration({ route, onNavigate }: ServerRouteComponentProps) 
                 onClick={() => void handleSaveServerSettings()}
                 disabled={isLoadingServerTab || isSavingServerSettings || isTogglingServer}
               >
-                {isSavingServerSettings ? 'Saving...' : 'Save'}
+                {isSavingServerSettings
+                  ? intl.formatMessage({ id: 'common.saving' })
+                  : intl.formatMessage({ id: 'common.save' })}
               </Button>
               <Button
                 className="server-btn server-start-btn"
@@ -374,12 +404,16 @@ export function Configuration({ route, onNavigate }: ServerRouteComponentProps) 
                 {isServerRunning ? (
                   <>
                     <StopIcon size={14} />
-                    {isTogglingServer ? 'Stopping...' : 'Stop Server'}
+                    {isTogglingServer
+                      ? intl.formatMessage({ id: 'config.server.stopping' })
+                      : intl.formatMessage({ id: 'config.server.stop' })}
                   </>
                 ) : (
                   <>
                     <ServerIcon size={14} />
-                    {isTogglingServer ? 'Starting...' : 'Start Server'}
+                    {isTogglingServer
+                      ? intl.formatMessage({ id: 'config.server.starting' })
+                      : intl.formatMessage({ id: 'config.server.start' })}
                   </>
                 )}
               </Button>
@@ -390,7 +424,7 @@ export function Configuration({ route, onNavigate }: ServerRouteComponentProps) 
         {route.configurationTab === 'printer' ? (
           <div className="configuration-form">
             <label className="server-form-label">
-              Printing Size
+              {intl.formatMessage({ id: 'config.printer.size' })}
               <Select
                 className="server-form-control"
                 value={printFormat}
@@ -410,10 +444,9 @@ export function Configuration({ route, onNavigate }: ServerRouteComponentProps) 
 
             <section className="printing-disable-card">
               <div className="printing-disable-content">
-                <h3>Disable Printing</h3>
+                <h3>{intl.formatMessage({ id: 'config.printer.disableTitle' })}</h3>
                 <p>
-                  This option will allow the application to continue distributions without default
-                  printing.
+                  {intl.formatMessage({ id: 'config.printer.disableDescription' })}
                 </p>
               </div>
               <label className="printing-switch">
@@ -434,7 +467,9 @@ export function Configuration({ route, onNavigate }: ServerRouteComponentProps) 
               onClick={() => void handleSavePrintSettings()}
               disabled={isLoadingPrintSettings || isSavingPrintSettings}
             >
-              {isSavingPrintSettings ? 'Saving...' : 'Save'}
+              {isSavingPrintSettings
+                ? intl.formatMessage({ id: 'common.saving' })
+                : intl.formatMessage({ id: 'common.save' })}
             </Button>
           </div>
         ) : null}
@@ -443,20 +478,21 @@ export function Configuration({ route, onNavigate }: ServerRouteComponentProps) 
           <div className="server-placeholder" />
         ) : null}
 
+        {route.configurationTab === 'language' ? (
+          <LanguageSettings />
+        ) : null}
+
         {route.configurationTab === 'developer' ? (
           <div className="configuration-form">
-            <p className="server-form-label">Development only</p>
-            <p className="server-form-muted">
-              Reset will clear all local tables (eligible data, users, distributions, client history
-              and runtime configuration).
-            </p>
+            <p className="server-form-label">{intl.formatMessage({ id: 'config.developer.title' })}</p>
+            <p className="server-form-muted">{intl.formatMessage({ id: 'config.developer.description' })}</p>
             <Button
               className="server-btn server-start-btn"
               onClick={() => {
                 setIsResetConfirmOpen(true);
               }}
             >
-              RESET
+              {intl.formatMessage({ id: 'config.developer.resetButton' })}
             </Button>
           </div>
         ) : null}
@@ -465,15 +501,17 @@ export function Configuration({ route, onNavigate }: ServerRouteComponentProps) 
       {isResetConfirmOpen ? (
         <div className="distribution-modal-backdrop" role="presentation">
           <div className="distribution-modal" role="dialog" aria-modal="true">
-            <h2>Confirm Reset</h2>
-            <p>This action will wipe local database data. Continue?</p>
+            <h2>{intl.formatMessage({ id: 'config.reset.confirmTitle' })}</h2>
+            <p>{intl.formatMessage({ id: 'config.reset.confirmDescription' })}</p>
             <div className="distribution-modal-actions">
               <Button
                 className="min-w-[124px]"
                 onClick={() => void handleResetDatabase()}
                 disabled={isResetting}
               >
-                {isResetting ? 'Resetting...' : 'Reset'}
+                {isResetting
+                  ? intl.formatMessage({ id: 'common.resetting' })
+                  : intl.formatMessage({ id: 'common.reset' })}
               </Button>
               <Button
                 variant="outline"
@@ -483,7 +521,7 @@ export function Configuration({ route, onNavigate }: ServerRouteComponentProps) 
                 }}
                 disabled={isResetting}
               >
-                Cancel
+                {intl.formatMessage({ id: 'common.cancel' })}
               </Button>
             </div>
           </div>

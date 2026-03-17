@@ -1,6 +1,6 @@
 {
   "name": "bert-v3",
-  "version": "0.5.1",
+  "version": "1.0.1",
   "private": true,
   "description": "BERT desktop app (Electron + Vite + React + TypeScript)",
   "main": "dist/main/main.js",
@@ -37,6 +37,7 @@
     "radix-ui": "^1.4.3",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
+    "react-intl": "^6.8.9",
     "react-redux": "^9.2.0",
     "react-to-print": "^3.3.0",
     "shadcn": "^4.0.5",

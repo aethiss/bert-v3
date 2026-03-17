@@ -1,4 +1,5 @@
 import { useMemo, useRef } from 'react';
+import { useIntl } from 'react-intl';
 import { useReactToPrint } from 'react-to-print';
 import { Button } from '@ui/components/ui/button';
 import type { ReceiptPayload } from './types';
@@ -15,6 +16,7 @@ type Props = {
 const LOGO_URL = 'https://uikit.wfp.org/cdn/logos/latest/wfp-logo-standard-black-en.svg';
 
 export function DistributionPrintPreview({ payload, onClose, onPrinted }: Props) {
+  const intl = useIntl();
   const printRef = useRef<HTMLDivElement>(null);
 
   const handlePrint = useReactToPrint({
@@ -35,10 +37,15 @@ export function DistributionPrintPreview({ payload, onClose, onPrinted }: Props)
 
   return (
     <div className="print-preview-overlay" role="presentation">
-      <div className="print-preview-shell" role="dialog" aria-modal="true" aria-label="Print preview">
+      <div
+        className="print-preview-shell"
+        role="dialog"
+        aria-modal="true"
+        aria-label={intl.formatMessage({ id: 'print.previewAria' })}
+      >
         <header className="print-preview-header">
-          <h2>Print Preview</h2>
-          <p>Format: {payload.format}</p>
+          <h2>{intl.formatMessage({ id: 'print.previewTitle' })}</h2>
+          <p>{intl.formatMessage({ id: 'print.previewFormat' }, { format: payload.format })}</p>
         </header>
 
         <section className="print-preview-content">
@@ -47,10 +54,10 @@ export function DistributionPrintPreview({ payload, onClose, onPrinted }: Props)
 
         <footer className="print-preview-actions">
           <Button variant="outline" className="server-btn distribution-cancel-btn" onClick={onClose}>
-            Close
+            {intl.formatMessage({ id: 'common.close' })}
           </Button>
           <Button className="server-btn" onClick={() => void handlePrint()}>
-            Print
+            {intl.formatMessage({ id: 'actions.print' })}
           </Button>
         </footer>
       </div>

@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { useIntl } from 'react-intl';
 import { toast } from 'sonner';
 import { Button } from '@ui/components/ui/button';
 import {
@@ -66,22 +67,28 @@ function downloadCsv(filename: string, content: string): void {
 }
 
 export function Data({ pendingDistributionCount }: Props) {
+  const intl = useIntl();
   const [isPushConfirmOpen, setIsPushConfirmOpen] = useState(false);
   const [isPushing, setIsPushing] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
 
   const pendingText = useMemo(() => {
-    const label = pendingDistributionCount === 1 ? 'distribution' : 'distributions';
-    return `${pendingDistributionCount} ${label} need to be pushed.`;
-  }, [pendingDistributionCount]);
+    return intl.formatMessage(
+      { id: 'data.pendingSummary' },
+      { count: pendingDistributionCount }
+    );
+  }, [intl, pendingDistributionCount]);
 
   const handlePushDistribution = async (): Promise<void> => {
     setIsPushing(true);
     try {
       const result = await clearDistributionQueue();
       window.dispatchEvent(new Event('distribution-queue-updated'));
-      toast.success('Push completed', {
-        description: `${result.deleted} local distribution(s) cleared.`
+      toast.success(intl.formatMessage({ id: 'data.pushCompletedTitle' }), {
+        description: intl.formatMessage(
+          { id: 'data.pushCompletedDescription' },
+          { count: result.deleted }
+        )
       });
       setIsPushConfirmOpen(false);
     } catch (error) {
@@ -96,8 +103,8 @@ export function Data({ pendingDistributionCount }: Props) {
     try {
       const rows = await getDistributionQueue();
       if (rows.length === 0) {
-        toast.error('Export failed', {
-          description: 'No local distributions available to export.'
+        toast.error(intl.formatMessage({ id: 'data.exportFailedTitle' }), {
+          description: intl.formatMessage({ id: 'data.exportFailedDescription' })
         });
         return;
       }
@@ -105,8 +112,11 @@ export function Data({ pendingDistributionCount }: Props) {
       const csv = createDistributionCsv(rows);
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
       downloadCsv(`distribution-report-${timestamp}.csv`, csv);
-      toast.success('Export completed', {
-        description: `${rows.length} row(s) exported to CSV.`
+      toast.success(intl.formatMessage({ id: 'data.exportCompletedTitle' }), {
+        description: intl.formatMessage(
+          { id: 'data.exportCompletedDescription' },
+          { count: rows.length }
+        )
       });
     } catch (error) {
       showErrorToast(error);
@@ -117,12 +127,12 @@ export function Data({ pendingDistributionCount }: Props) {
 
   return (
     <section className="server-content-block">
-      <h1 className="server-page-title">Data</h1>
+      <h1 className="server-page-title">{intl.formatMessage({ id: 'data.title' })}</h1>
 
       <section className="data-section">
         <div className="data-section-row">
           <div>
-            <p className="data-section-title">Synchronize data and finish distribution</p>
+            <p className="data-section-title">{intl.formatMessage({ id: 'data.syncSectionTitle' })}</p>
             <p className="data-section-warning">X {pendingText}</p>
           </div>
           <Button
@@ -132,21 +142,25 @@ export function Data({ pendingDistributionCount }: Props) {
               setIsPushConfirmOpen(true);
             }}
           >
-            {isPushing ? 'Pushing...' : 'Push Distribution'}
+            {isPushing
+              ? intl.formatMessage({ id: 'data.pushing' })
+              : intl.formatMessage({ id: 'data.pushDistribution' })}
           </Button>
         </div>
       </section>
 
       <section className="data-section data-section-export">
-        <h2 className="data-export-title">Export Reports</h2>
+        <h2 className="data-export-title">{intl.formatMessage({ id: 'data.exportReportsTitle' })}</h2>
         <div className="data-section-row">
-          <p className="data-section-title">Export distribution report to excel</p>
+          <p className="data-section-title">{intl.formatMessage({ id: 'data.exportSectionTitle' })}</p>
           <Button
             className="server-btn data-action-btn"
             onClick={() => void handleExport()}
             disabled={isExporting}
           >
-            {isExporting ? 'Exporting...' : 'Export'}
+            {isExporting
+              ? intl.formatMessage({ id: 'data.exporting' })
+              : intl.formatMessage({ id: 'data.export' })}
           </Button>
         </div>
       </section>
@@ -154,18 +168,17 @@ export function Data({ pendingDistributionCount }: Props) {
       {isPushConfirmOpen ? (
         <div className="distribution-modal-backdrop" role="presentation">
           <div className="distribution-modal" role="dialog" aria-modal="true">
-            <h2>Confirm Push Distribution</h2>
-            <p>
-              Endpoint is not ready yet. This action will simulate push and clear all local
-              distributions. Continue?
-            </p>
+            <h2>{intl.formatMessage({ id: 'data.confirmPushTitle' })}</h2>
+            <p>{intl.formatMessage({ id: 'data.confirmPushDescription' })}</p>
             <div className="distribution-modal-actions">
               <Button
                 className="server-btn"
                 onClick={() => void handlePushDistribution()}
                 disabled={isPushing}
               >
-                {isPushing ? 'Confirming...' : 'Confirm'}
+                {isPushing
+                  ? intl.formatMessage({ id: 'data.confirming' })
+                  : intl.formatMessage({ id: 'actions.confirm' })}
               </Button>
               <Button
                 variant="outline"
@@ -175,7 +188,7 @@ export function Data({ pendingDistributionCount }: Props) {
                 }}
                 disabled={isPushing}
               >
-                Cancel
+                {intl.formatMessage({ id: 'common.cancel' })}
               </Button>
             </div>
           </div>
