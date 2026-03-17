@@ -7,6 +7,7 @@ import { setOnlineAuthSession } from '@renderer/store/authSlice';
 import { Button } from '@ui/components/ui/button';
 import { isRtkLikeError, toErrorMessage } from '@renderer/lib/errorMessage';
 import { showErrorToast } from '@renderer/lib/errorToast';
+import wfpLogoEmblemWhite from '@renderer/assets/branding/wfp-logo-emblem-white-all.svg';
 
 export function LoginPage() {
   const intl = useIntl();
@@ -79,7 +80,7 @@ export function LoginPage() {
           <div className="login-brand">
             <img
               className="login-brand-logo"
-              src="https://uikit.wfp.org/cdn/logos/latest/wfp-logo-emblem-white-all.svg"
+              src={wfpLogoEmblemWhite}
               alt={intl.formatMessage({ id: 'brand.wfp' })}
             />
             <p className="login-brand-text">{intl.formatMessage({ id: 'brand.wfp' })}</p>

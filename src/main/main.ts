@@ -1,4 +1,5 @@
-import { app, BrowserWindow } from 'electron';
+import { app, BrowserWindow, nativeImage } from 'electron';
+import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { initializeDatabase } from './database/database';
 import { registerAuthIpc } from './ipc/authIpc';
@@ -13,14 +14,36 @@ import { createLocalApiServer } from './server/localApiServer';
 
 const isDev = !app.isPackaged;
 let mainWindow: BrowserWindow | null = null;
+const APP_ICON_RELATIVE_PATH = path.join('src', 'renderer', 'assets', 'branding', 'bert-icon.png');
+
+function resolveAppIconPath(): string | null {
+  const candidates = [
+    path.join(app.getAppPath(), APP_ICON_RELATIVE_PATH),
+    path.resolve(__dirname, '../../', APP_ICON_RELATIVE_PATH),
+    path.join(process.cwd(), APP_ICON_RELATIVE_PATH),
+    path.join(process.resourcesPath, APP_ICON_RELATIVE_PATH),
+    path.join(process.resourcesPath, 'app.asar.unpacked', APP_ICON_RELATIVE_PATH)
+  ];
+
+  for (const candidate of candidates) {
+    if (existsSync(candidate)) {
+      return candidate;
+    }
+  }
+
+  return null;
+}
 
 async function createMainWindow(): Promise<void> {
+  const appIconPath = resolveAppIconPath();
+
   const window = new BrowserWindow({
     width: 1280,
     height: 800,
     minWidth: 960,
     minHeight: 600,
     show: false,
+    ...(appIconPath ? { icon: appIconPath } : {}),
     webPreferences: {
       preload: path.join(__dirname, '../preload/index.js'),
       contextIsolation: true,
@@ -60,6 +83,17 @@ async function bootstrap(): Promise<void> {
 }
 
 app.whenReady().then(() => {
+  if (process.platform === 'darwin') {
+    const appIconPath = resolveAppIconPath();
+    if (appIconPath) {
+      const dockIcon = nativeImage.createFromPath(appIconPath);
+      const dock = app.dock;
+      if (!dockIcon.isEmpty() && dock) {
+        dock.setIcon(dockIcon);
+      }
+    }
+  }
+
   void bootstrap().catch((error: unknown) => {
     console.error('Application bootstrap failed', error);
     app.quit();

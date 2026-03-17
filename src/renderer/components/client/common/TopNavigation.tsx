@@ -2,6 +2,7 @@ import { Link2, Printer } from 'lucide-react';
 import { useIntl } from 'react-intl';
 import { Button } from '@ui/components/ui/button';
 import type { ClientSection } from '@renderer/components/client/types';
+import wfpLogoEmblemBlue from '@renderer/assets/branding/wfp-logo-emblem-blue-all.svg';
 
 export interface ClientTopNavItem {
   id: ClientSection;
@@ -34,7 +35,7 @@ export function TopNavigation({
       <div className="server-brand">
         <img
           className="server-brand-logo"
-          src="https://uikit.wfp.org/cdn/logos/latest/wfp-logo-emblem-blue-all.svg"
+          src={wfpLogoEmblemBlue}
           alt={intl.formatMessage({ id: 'brand.wfp' })}
         />
         <span className="server-brand-name">BeRT-Client</span>

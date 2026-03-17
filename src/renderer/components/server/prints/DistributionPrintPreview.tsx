@@ -6,6 +6,7 @@ import type { ReceiptPayload } from './types';
 import { Receipt58mm } from './Receipt58mm';
 import { Receipt80mm } from './Receipt80mm';
 import { ReceiptA5 } from './ReceiptA5';
+import wfpLogoStandardBlackEn from '@renderer/assets/branding/wfp-logo-standard-black-en.svg';
 
 type Props = {
   payload: ReceiptPayload;
@@ -13,7 +14,7 @@ type Props = {
   onPrinted: () => void;
 };
 
-const LOGO_URL = 'https://uikit.wfp.org/cdn/logos/latest/wfp-logo-standard-black-en.svg';
+const LOGO_URL = wfpLogoStandardBlackEn;
 
 export function DistributionPrintPreview({ payload, onClose, onPrinted }: Props) {
   const intl = useIntl();
