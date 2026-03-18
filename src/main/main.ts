@@ -8,7 +8,7 @@ import { registerEligibleDataIpc } from './ipc/eligibleDataIpc';
 import { registerInstallerIpc } from './ipc/installerIpc';
 import { createRuntimeConfigService } from './services/configService';
 import { createEligibleDataService } from './services/eligibleDataService';
-import { loadDotEnvFromProjectRoot } from './services/envService';
+import { loadDotEnvFromKnownLocations } from './services/envService';
 import { createUserService } from './services/userService';
 import { createLocalApiServer } from './server/localApiServer';
 
@@ -63,7 +63,10 @@ async function createMainWindow(): Promise<void> {
 }
 
 async function bootstrap(): Promise<void> {
-  loadDotEnvFromProjectRoot();
+  const envPath = loadDotEnvFromKnownLocations();
+  if (envPath) {
+    console.info('[env] Loaded runtime environment file', { envPath });
+  }
 
   const appDatabase = await initializeDatabase(app.getPath('userData'));
   const configService = createRuntimeConfigService(appDatabase.connection);

@@ -4,6 +4,7 @@ import tailwindcss from '@tailwindcss/vite';
 import path from 'node:path';
 
 export default defineConfig({
+  base: './',
   plugins: [react(), tailwindcss()],
   envPrefix: ['VITE_', 'RENDERER_VITE_'],
   resolve: {

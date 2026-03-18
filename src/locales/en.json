@@ -70,7 +70,7 @@
   "config.tabs.server": "Server",
   "config.title": "Configuration",
   "dashboard.subtitle": "Production foundation ready: Electron + Vite + React + TypeScript.",
-  "dashboard.title": "BERT v3",
+  "dashboard.title": "BERT v2",
   "data.confirmPushDescription": "Endpoint is not ready yet. This action will simulate push and clear all local distributions. Continue?",
   "data.confirmPushTitle": "Confirm Push Distribution",
   "data.confirming": "Confirming...",

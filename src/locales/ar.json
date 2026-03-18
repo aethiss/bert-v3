@@ -70,7 +70,7 @@
   "config.tabs.server": "الخادم",
   "config.title": "الإعدادات",
   "dashboard.subtitle": "الأساس الإنتاجي جاهز: Electron + Vite + React + TypeScript.",
-  "dashboard.title": "BERT v3",
+  "dashboard.title": "BERT v2",
   "data.confirmPushDescription": "نقطة النهاية غير جاهزة بعد. سيحاكي هذا الإجراء عملية الإرسال ويمسح جميع التوزيعات المحلية. هل تريد المتابعة؟",
   "data.confirmPushTitle": "تأكيد إرسال التوزيعات",
   "data.confirming": "جارٍ التأكيد...",

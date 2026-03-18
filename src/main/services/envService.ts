@@ -13,13 +13,10 @@ function stripWrappingQuotes(value: string): string {
   return trimmed;
 }
 
-export function loadDotEnvFromProjectRoot(): void {
-  const envPath = path.resolve(process.cwd(), '.env');
-
+function loadDotEnvFile(envPath: string): boolean {
   if (!fs.existsSync(envPath)) {
-    return;
+    return false;
   }
-
   const content = fs.readFileSync(envPath, 'utf-8');
   const lines = content.split(/\r?\n/);
 
@@ -44,4 +41,22 @@ export function loadDotEnvFromProjectRoot(): void {
       process.env[key] = stripWrappingQuotes(rawValue);
     }
   }
+
+  return true;
+}
+
+export function loadDotEnvFromKnownLocations(): string | null {
+  const candidates = [
+    path.resolve(process.cwd(), '.env'),
+    path.join(process.resourcesPath, 'app.env'),
+    path.join(process.resourcesPath, '.env')
+  ];
+
+  for (const candidate of candidates) {
+    if (loadDotEnvFile(candidate)) {
+      return candidate;
+    }
+  }
+
+  return null;
 }
