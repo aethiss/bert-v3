@@ -1,6 +1,6 @@
 {
   "name": "bert-v2",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "private": true,
   "description": "BERT desktop app (Electron + Vite + React + TypeScript)",
   "main": "dist/main/main.js",

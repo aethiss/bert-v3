@@ -7,6 +7,7 @@ import type {
   EligibleMembersApiResponse,
   LocalDistributionEventInput
 } from '../../shared/types/eligible';
+import { getEnvValue } from '../services/envService';
 import type { EligibleDataService } from '../services/eligibleDataService';
 
 const CHANNEL_SAVE_ELIGIBLE_DATA = 'eligibleData:save';
@@ -23,14 +24,14 @@ const CHANNEL_SAVE_CLIENT_DISTRIBUTION_HISTORY = 'eligibleData:saveClientDistrib
 const CHANNEL_GET_CLIENT_DISTRIBUTION_HISTORY = 'eligibleData:getClientDistributionHistory';
 
 function resolveEligibleMembersUrl(fdpCode: string): string {
-  const apiBase = process.env.RENDERER_VITE_API_URL ?? process.env.VITE_API_URL;
+  const apiBase = getEnvValue('RENDERER_VITE_API_URL') ?? getEnvValue('VITE_API_URL');
   if (!apiBase) {
     throw new Error('Missing API base URL. Set RENDERER_VITE_API_URL or VITE_API_URL.');
   }
 
   const endpointPath =
-    process.env.RENDERER_VITE_ELIGIBLE_MEMBERS_PATH ??
-    process.env.VITE_ELIGIBLE_MEMBERS_PATH ??
+    getEnvValue('RENDERER_VITE_ELIGIBLE_MEMBERS_PATH') ??
+    getEnvValue('VITE_ELIGIBLE_MEMBERS_PATH') ??
     '/api/v1/active-cycles-households/';
 
   const normalizedPath = endpointPath.endsWith('/') ? endpointPath : `${endpointPath}/`;

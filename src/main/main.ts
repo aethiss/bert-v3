@@ -63,9 +63,14 @@ async function createMainWindow(): Promise<void> {
 }
 
 async function bootstrap(): Promise<void> {
-  const envPath = loadDotEnvFromKnownLocations();
-  if (envPath) {
-    console.info('[env] Loaded runtime environment file', { envPath });
+  const envLoadResult = loadDotEnvFromKnownLocations({
+    preferBundledAppEnv: app.isPackaged,
+    requiredKeys: ['MAIN_VITE_CIAM_URL']
+  });
+  if (envLoadResult.loadedPaths.length > 0) {
+    console.info('[env] Loaded runtime environment files', envLoadResult);
+  } else {
+    console.warn('[env] No runtime environment file found');
   }
 
   const appDatabase = await initializeDatabase(app.getPath('userData'));

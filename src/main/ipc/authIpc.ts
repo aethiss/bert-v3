@@ -1,6 +1,7 @@
 import { BrowserWindow, ipcMain } from 'electron';
 import type { CiamLoginResult, ExchangeCodeResult } from '../../shared/types/ipc/auth';
 import type { PersistedUserProfile, UserInfoApiModel } from '../../shared/types/user';
+import { getEnvValue } from '../services/envService';
 import type { UserService } from '../services/userService';
 
 const CHANNEL_OPEN_CIAM_LOGIN = 'auth:openCiamLogin';
@@ -45,14 +46,14 @@ function maskToken(value: string): string {
 }
 
 function resolveExchangeCodeUrl(exchangeKey: string): string {
-  const explicitUrl = process.env.OIDC_JWT_URL;
+  const explicitUrl = getEnvValue('OIDC_JWT_URL');
   if (explicitUrl) {
     const parsed = new URL(explicitUrl);
     parsed.searchParams.set('key', exchangeKey);
     return parsed.toString();
   }
 
-  const apiBase = process.env.RENDERER_VITE_API_URL ?? process.env.VITE_API_URL;
+  const apiBase = getEnvValue('RENDERER_VITE_API_URL') ?? getEnvValue('VITE_API_URL');
   if (!apiBase) {
     throw new Error(
       'Missing exchange endpoint configuration. Set OIDC_JWT_URL or RENDERER_VITE_API_URL.'
@@ -65,7 +66,7 @@ function resolveExchangeCodeUrl(exchangeKey: string): string {
 }
 
 function resolveUserInfoUrl(): string {
-  const apiBase = process.env.RENDERER_VITE_API_URL ?? process.env.VITE_API_URL;
+  const apiBase = getEnvValue('RENDERER_VITE_API_URL') ?? getEnvValue('VITE_API_URL');
   if (!apiBase) {
     throw new Error('Missing API base URL. Set RENDERER_VITE_API_URL or VITE_API_URL.');
   }
@@ -199,7 +200,7 @@ export function registerAuthIpc(
       throw new Error('Main window is not available.');
     }
 
-    const ciamUrl = process.env.MAIN_VITE_CIAM_URL;
+    const ciamUrl = getEnvValue('MAIN_VITE_CIAM_URL');
     if (!ciamUrl) {
       throw new Error('Missing MAIN_VITE_CIAM_URL environment variable.');
     }
