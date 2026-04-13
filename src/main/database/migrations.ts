@@ -157,6 +157,9 @@ async function ensureEligibleTablesSchema(db: Database): Promise<void> {
   const hasCompositeMembersFamilyFk =
     membersSql.includes('foreign key(family_hh_id, cycle_code) references families(hh_id, cycle_code)') ||
     membersSql.includes('foreign key (family_hh_id, cycle_code) references families(hh_id, cycle_code)');
+  const isV5FamiliesSchema =
+    familiesSql.includes('primary key(family_unique_code)') ||
+    familiesSql.includes('primary key (family_unique_code)');
 
   if (hasCompositeFamiliesPk && hasCompositeMembersFamilyFk) {
     return;
@@ -164,8 +167,19 @@ async function ensureEligibleTablesSchema(db: Database): Promise<void> {
 
   await db.exec('PRAGMA foreign_keys = OFF');
   try {
-    await db.exec('ALTER TABLE families RENAME TO families_legacy');
-    await db.exec('ALTER TABLE members RENAME TO members_legacy');
+    if (isV5FamiliesSchema) {
+      console.info(
+        '[migrations] Detected v5 eligible schema on legacy branch; rebuilding eligible cache tables.'
+      );
+    } else {
+      console.info('[migrations] Detected incompatible eligible schema; rebuilding eligible cache tables.');
+    }
+
+    // Eligible data is a sync cache, so on mismatch we rebuild instead of attempting
+    // column-level copy between incompatible shapes.
+    await db.exec('DROP TABLE IF EXISTS members');
+    await db.exec('DROP TABLE IF EXISTS families');
+    await db.exec('DELETE FROM eligible_meta');
 
     await db.exec(`
       CREATE TABLE families (
@@ -210,35 +224,6 @@ async function ensureEligibleTablesSchema(db: Database): Promise<void> {
         FOREIGN KEY(family_hh_id, cycle_code) REFERENCES families(hh_id, cycle_code) ON DELETE CASCADE
       );
     `);
-
-    await db.exec(`
-      INSERT OR REPLACE INTO families (
-        hh_id, cycle_code, assigned_status, household_size, quantity, assistance_package_name,
-        cooperating_partner, fdp_id, fdp_name, children_6_23_months, family_unique_code,
-        address, status, eligible, updated_at
-      )
-      SELECT
-        hh_id, cycle_code, assigned_status, household_size, quantity, assistance_package_name,
-        cooperating_partner, fdp_id, fdp_name, children_6_23_months, family_unique_code,
-        address, status, eligible, updated_at
-      FROM families_legacy;
-    `);
-
-    await db.exec(`
-      INSERT OR REPLACE INTO members (
-        member_id, cycle_code, family_hh_id, role, first_name, last_name,
-        father_name, mother_name, mother_last_name, city_of_birth,
-        date_of_birth, document_number, status, updated_at
-      )
-      SELECT
-        member_id, cycle_code, family_hh_id, role, first_name, last_name,
-        father_name, mother_name, mother_last_name, city_of_birth,
-        date_of_birth, document_number, status, updated_at
-      FROM members_legacy;
-    `);
-
-    await db.exec('DROP TABLE members_legacy');
-    await db.exec('DROP TABLE families_legacy');
   } finally {
     await db.exec('PRAGMA foreign_keys = ON');
   }
