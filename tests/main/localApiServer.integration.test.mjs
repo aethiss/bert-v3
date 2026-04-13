@@ -55,39 +55,34 @@ test('local api server serves client distribution flow endpoints', async () => {
           cycleName: 'SFA-Jan',
           cycleNote: null,
           household_count: 1,
-          households: [
+          foodCommodities: []
+        }
+      ],
+      families: [
+        {
+          FamilyUniqueCode: 2000000617,
+          address: null,
+          status: 'ACTIVE',
+          eligible: true,
+          fdp_id: 'fdp-id',
+          fdp_name: 'Damascus',
+          Number_of_Children_between_6_and_23_Months: 0,
+          distributionHistory: [],
+          cycles: [{ code: 3301, quantity: '1' }],
+          members: [
             {
-              hhId: 'HH-1',
-              cycleCode: 3301,
-              assignedStatus: 'assigned',
-              householdSize: '4',
-              quantity: '1',
-              assistancePackageName: 'SFA',
-              cooperatingPartner: null,
-              fdp_id: 'fdp-id',
-              fdp_name: 'Damascus',
-              Number_of_Children_between_6_and_23_Months: 0,
-              FamilyUniqueCode: 2000000617,
-              address: null,
-              status: 'ACTIVE',
-              eligible: true,
-              members: [
-                {
-                  id: 119293,
-                  family: 2000000617,
-                  role: 'Principle',
-                  firstName: 'John',
-                  lastName: 'Doe',
-                  fatherName: null,
-                  motherName: null,
-                  motherLastName: null,
-                  cityOfBirth: null,
-                  dateOfBirth: null,
-                  documentNumber: '65379946927',
-                  cycleCode: 3301,
-                  status: 'eligible'
-                }
-              ]
+              id: 119293,
+              family: 2000000617,
+              role: 'Principle',
+              firstName: 'John',
+              lastName: 'Doe',
+              fatherName: null,
+              motherName: null,
+              motherLastName: null,
+              cityOfBirth: null,
+              dateOfBirth: null,
+              documentNumber: '65379946927',
+              status: 'eligible'
             }
           ]
         }
@@ -123,7 +118,7 @@ test('local api server serves client distribution flow endpoints', async () => {
     assert.equal(search.data.result.member.id, 119293);
 
     const detail = await jsonRequest(
-      `${baseUrl}/distribution/detail?memberId=119293&cycleCode=3301&familyHhId=HH-1`,
+      `${baseUrl}/distribution/detail?memberId=119293&familyUniqueCode=2000000617`,
       {
         method: 'GET',
         headers: authHeader

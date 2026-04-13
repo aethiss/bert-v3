@@ -2,7 +2,7 @@ export type ClientSection = 'overview' | 'distribution' | 'configuration';
 
 export type ClientDistributionMode = 'search' | 'result' | 'detail';
 
-export type ClientConfigurationTab = 'connection' | 'printer' | 'developer';
+export type ClientConfigurationTab = 'connection' | 'printer' | 'updates' | 'developer';
 
 export interface ClientRouteState {
   section: ClientSection;

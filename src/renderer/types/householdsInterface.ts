@@ -1,6 +1,18 @@
+export interface IFoodCommodity {
+  id: number;
+  unique_id: string;
+  en_name: string;
+  ar_name: string;
+  description: string | null;
+  kcal: number | null;
+  unit: string | null;
+  quantity: number | null;
+  weight: number | null;
+}
+
 export interface IMember {
   id: number;
-  family: number;
+  family: number | string;
   role: string | null;
   firstName: string | null;
   lastName: string | null;
@@ -10,7 +22,6 @@ export interface IMember {
   cityOfBirth: string | null;
   dateOfBirth: string | null;
   documentNumber: string | null;
-  cycleCode: number;
   status: string;
 }
 
@@ -37,23 +48,22 @@ export interface IDistributionHistory {
   validityFlag: string;
 }
 
-export interface IActiveHousehold {
-  hhId: string;
-  cycleCode: number;
-  assignedStatus: string;
-  householdSize: string;
+export interface IFamilyCycle {
+  code: number;
   quantity: string;
-  assistancePackageName: string;
-  cooperatingPartner: string | null;
-  fdp_id: string;
-  fdp_name: string;
-  Number_of_Children_between_6_and_23_Months: number;
-  FamilyUniqueCode: number;
+}
+
+export interface IActiveHousehold {
+  FamilyUniqueCode: number | string;
   address: string | null;
   status: string;
   eligible: boolean;
+  fdp_id: string;
+  fdp_name: string;
+  Number_of_Children_between_6_and_23_Months: number;
   members?: IMember[];
   distributionHistory?: IDistributionHistory[];
+  cycles?: IFamilyCycle[];
 }
 
 export interface IActiveCycle {
@@ -67,7 +77,7 @@ export interface IActiveCycle {
   cycleName: string;
   cycleNote: string | null;
   household_count: number;
-  households?: IActiveHousehold[];
+  foodCommodities?: IFoodCommodity[];
 }
 
 export interface IActiveCyclesAPI {
@@ -76,6 +86,7 @@ export interface IActiveCyclesAPI {
   total_households: number;
   total_cycles: number;
   cycles: IActiveCycle[];
+  families: IActiveHousehold[];
 }
 
 export interface IMemberDTO extends IMember {

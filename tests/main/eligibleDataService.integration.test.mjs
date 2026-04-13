@@ -11,6 +11,88 @@ const sqlite3 = require('sqlite3');
 const { runMigrations } = require('../../dist/main/database/migrations.js');
 const { createEligibleDataService } = require('../../dist/main/services/eligibleDataService.js');
 
+function buildPayload({ fdpCode, fdpName, cycles, families }) {
+  return {
+    fdp_code: fdpCode,
+    fdp_name: fdpName,
+    total_households: families.length,
+    total_cycles: cycles.length,
+    cycles,
+    families
+  };
+}
+
+function createCycle({
+  cycleCode,
+  cycleId,
+  cycleName,
+  assistancePackageName = 'SFA',
+  startDate = '2026-05-01',
+  endDate = '2026-05-31',
+  foodCommodities = []
+}) {
+  return {
+    cycleId,
+    cycleCode,
+    startDate,
+    endDate,
+    cooperatingPartner: null,
+    fieldDistributionPoint: null,
+    assistancePackageName,
+    cycleName,
+    cycleNote: null,
+    household_count: 0,
+    foodCommodities
+  };
+}
+
+function createFamily({
+  familyUniqueCode,
+  fdpId = 'fdp-id',
+  fdpName = 'FDP',
+  address = null,
+  children = 0,
+  cycles = [],
+  members = []
+}) {
+  return {
+    FamilyUniqueCode: familyUniqueCode,
+    address,
+    status: 'ACTIVE',
+    eligible: true,
+    fdp_id: fdpId,
+    fdp_name: fdpName,
+    Number_of_Children_between_6_and_23_Months: children,
+    distributionHistory: [],
+    cycles,
+    members
+  };
+}
+
+function createMember({
+  id,
+  family,
+  role,
+  firstName,
+  lastName,
+  documentNumber
+}) {
+  return {
+    id,
+    family,
+    role,
+    firstName,
+    lastName,
+    fatherName: null,
+    motherName: null,
+    motherLastName: null,
+    cityOfBirth: null,
+    dateOfBirth: null,
+    documentNumber,
+    status: 'eligible'
+  };
+}
+
 test('eligibleDataService persists and returns overview summary', async () => {
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'bert-eligible-'));
   const dbPath = path.join(tempDir, 'test.sqlite');
@@ -24,61 +106,55 @@ test('eligibleDataService persists and returns overview summary', async () => {
     await runMigrations(db);
     const service = createEligibleDataService(db);
 
-    const payload = {
-      fdp_code: 'FDP-77',
-      fdp_name: 'Aleppo',
-      total_households: 2,
-      total_cycles: 1,
+    const payload = buildPayload({
+      fdpCode: 'FDP-77',
+      fdpName: 'Aleppo',
       cycles: [
-        {
+        createCycle({
           cycleId: 'cycle-1',
           cycleCode: 9001,
-          startDate: '2026-04-01',
-          endDate: '2026-04-30',
-          cooperatingPartner: 'CP',
-          fieldDistributionPoint: 'FDP-A',
-          assistancePackageName: 'SFA',
           cycleName: 'SFA - Apr',
-          cycleNote: null,
-          household_count: 2,
-          households: [
+          foodCommodities: [
             {
-              hhId: 'HH-1',
-              cycleCode: 9001,
-              assignedStatus: 'assigned',
-              householdSize: '4',
-              quantity: '2',
-              assistancePackageName: 'SFA',
-              cooperatingPartner: 'CP',
-              fdp_id: 'fdp-id',
-              fdp_name: 'FDP-A',
-              Number_of_Children_between_6_and_23_Months: 1,
-              FamilyUniqueCode: 123,
-              address: 'Damascus',
-              status: 'ACTIVE',
-              eligible: true,
-              members: [
-                {
-                  id: 1,
-                  family: 123,
-                  role: 'head',
-                  firstName: 'A',
-                  lastName: 'B',
-                  fatherName: null,
-                  motherName: null,
-                  motherLastName: null,
-                  cityOfBirth: null,
-                  dateOfBirth: null,
-                  documentNumber: null,
-                  cycleCode: null,
-                  status: 'eligible'
-                }
-              ]
+              id: 1,
+              unique_id: 'rice-1',
+              en_name: 'Rice',
+              ar_name: 'أرز',
+              description: null,
+              kcal: 12,
+              unit: 'kg',
+              quantity: 2,
+              weight: 20
             }
           ]
-        }
+        })
+      ],
+      families: [
+        createFamily({
+          familyUniqueCode: 123,
+          fdpName: 'FDP-A',
+          address: 'Damascus',
+          children: 1,
+          cycles: [{ code: 9001, quantity: '2' }],
+          members: [
+            createMember({
+              id: 1,
+              family: 123,
+              role: 'head',
+              firstName: 'A',
+              lastName: 'B',
+              documentNumber: null
+            })
+          ]
+        }),
+        createFamily({
+          familyUniqueCode: 124,
+          fdpName: 'FDP-A',
+          cycles: [{ code: 9001, quantity: '1' }],
+          members: []
+        })
       ]
-    };
+    });
 
     await service.saveEligibleMembers(payload);
 
@@ -112,76 +188,42 @@ test('eligibleDataService searches member offline by family unique code and docu
     await runMigrations(db);
     const service = createEligibleDataService(db);
 
-    const payload = {
-      fdp_code: 'FDP-88',
-      fdp_name: 'Homs',
-      total_households: 1,
-      total_cycles: 1,
+    const payload = buildPayload({
+      fdpCode: 'FDP-88',
+      fdpName: 'Homs',
       cycles: [
-        {
+        createCycle({
           cycleId: 'cycle-10',
           cycleCode: 1010,
-          startDate: '2026-05-01',
-          endDate: '2026-05-31',
-          cooperatingPartner: null,
-          fieldDistributionPoint: null,
-          assistancePackageName: 'SFA',
-          cycleName: 'SFA - May',
-          cycleNote: null,
-          household_count: 1,
-          households: [
-            {
-              hhId: 'HH-10',
-              cycleCode: 1010,
-              assignedStatus: 'assigned',
-              householdSize: '3',
-              quantity: '2',
-              assistancePackageName: 'SFA',
-              cooperatingPartner: null,
-              fdp_id: 'fdp-id',
-              fdp_name: 'FDP-H',
-              Number_of_Children_between_6_and_23_Months: 0,
-              FamilyUniqueCode: 556677,
-              address: null,
-              status: 'ACTIVE',
-              eligible: true,
-              members: [
-                {
-                  id: 10,
-                  family: 556677,
-                  role: 'Member',
-                  firstName: 'A',
-                  lastName: 'B',
-                  fatherName: null,
-                  motherName: null,
-                  motherLastName: null,
-                  cityOfBirth: null,
-                  dateOfBirth: null,
-                  documentNumber: 'DOC-10',
-                  cycleCode: 1010,
-                  status: 'eligible'
-                },
-                {
-                  id: 11,
-                  family: 556677,
-                  role: 'Principle',
-                  firstName: 'C',
-                  lastName: 'D',
-                  fatherName: null,
-                  motherName: null,
-                  motherLastName: null,
-                  cityOfBirth: null,
-                  dateOfBirth: null,
-                  documentNumber: 'DOC-11',
-                  cycleCode: 1010,
-                  status: 'eligible'
-                }
-              ]
-            }
+          cycleName: 'SFA - May'
+        })
+      ],
+      families: [
+        createFamily({
+          familyUniqueCode: 556677,
+          fdpName: 'FDP-H',
+          cycles: [{ code: 1010, quantity: '2' }],
+          members: [
+            createMember({
+              id: 10,
+              family: 556677,
+              role: 'Member',
+              firstName: 'A',
+              lastName: 'B',
+              documentNumber: 'DOC-10'
+            }),
+            createMember({
+              id: 11,
+              family: 556677,
+              role: 'Principle',
+              firstName: 'C',
+              lastName: 'D',
+              documentNumber: 'DOC-11'
+            })
           ]
-        }
+        })
       ]
-    };
+    });
 
     await service.saveEligibleMembers(payload);
 
@@ -195,17 +237,17 @@ test('eligibleDataService searches member offline by family unique code and docu
 
     const detail = await service.getDistributionDetail({
       memberId: byFamily.member.id,
-      cycleCode: byFamily.member.cycleCode,
-      familyHhId: byFamily.member.familyHhId
+      familyUniqueCode: byFamily.member.familyUniqueCode
     });
     assert.equal(detail.household.familyUniqueCode, 556677);
     assert.equal(Array.isArray(detail.activeCycles), true);
     assert.equal(detail.activeCycles.length, 1);
+    assert.equal(detail.activeCycles[0].quantity, '2');
 
     const saveResult = await service.saveDistributionEvent({
       familyUniqueCode: 556677,
       memberId: byFamily.member.id,
-      cycleCode: byFamily.member.cycleCode,
+      cycleCode: detail.activeCycles[0].cycleCode,
       mainOperator: 595,
       mainOperatorFDP: '2547002158',
       subOperator: null,
@@ -220,7 +262,7 @@ test('eligibleDataService searches member offline by family unique code and docu
         service.saveDistributionEvent({
           familyUniqueCode: 556677,
           memberId: byDocument.member.id,
-          cycleCode: byFamily.member.cycleCode,
+          cycleCode: detail.activeCycles[0].cycleCode,
           mainOperator: 595,
           mainOperatorFDP: '2547002158',
           subOperator: null,
@@ -259,94 +301,51 @@ test('client distributions inherit server operator and operations aggregates exc
       'Damascus SO'
     );
 
-    await service.saveEligibleMembers({
-      fdp_code: 'FDP-99',
-      fdp_name: 'Damascus',
-      total_households: 2,
-      total_cycles: 1,
-      cycles: [
-        {
-          cycleId: 'cycle-20',
-          cycleCode: 3301,
-          startDate: '2026-05-01',
-          endDate: '2026-05-31',
-          cooperatingPartner: null,
-          fieldDistributionPoint: null,
-          assistancePackageName: 'SFA',
-          cycleName: 'SFA - May',
-          cycleNote: null,
-          household_count: 2,
-          households: [
-            {
-              hhId: 'HH-20',
-              cycleCode: 3301,
-              assignedStatus: 'assigned',
-              householdSize: '3',
-              quantity: '1',
-              assistancePackageName: 'SFA',
-              cooperatingPartner: null,
-              fdp_id: 'fdp-id',
-              fdp_name: 'FDP-H',
-              Number_of_Children_between_6_and_23_Months: 0,
-              FamilyUniqueCode: 700001,
-              address: null,
-              status: 'ACTIVE',
-              eligible: true,
-              members: [
-                {
-                  id: 101,
-                  family: 700001,
-                  role: 'Principle',
-                  firstName: 'A',
-                  lastName: 'One',
-                  fatherName: null,
-                  motherName: null,
-                  motherLastName: null,
-                  cityOfBirth: null,
-                  dateOfBirth: null,
-                  documentNumber: 'DOC-101',
-                  cycleCode: 3301,
-                  status: 'eligible'
-                }
-              ]
-            },
-            {
-              hhId: 'HH-21',
-              cycleCode: 3301,
-              assignedStatus: 'assigned',
-              householdSize: '4',
-              quantity: '1',
-              assistancePackageName: 'SFA',
-              cooperatingPartner: null,
-              fdp_id: 'fdp-id',
-              fdp_name: 'FDP-H',
-              Number_of_Children_between_6_and_23_Months: 0,
-              FamilyUniqueCode: 700002,
-              address: null,
-              status: 'ACTIVE',
-              eligible: true,
-              members: [
-                {
-                  id: 102,
-                  family: 700002,
-                  role: 'Principle',
-                  firstName: 'B',
-                  lastName: 'Two',
-                  fatherName: null,
-                  motherName: null,
-                  motherLastName: null,
-                  cityOfBirth: null,
-                  dateOfBirth: null,
-                  documentNumber: 'DOC-102',
-                  cycleCode: 3301,
-                  status: 'eligible'
-                }
-              ]
-            }
-          ]
-        }
-      ]
-    });
+    await service.saveEligibleMembers(
+      buildPayload({
+        fdpCode: 'FDP-99',
+        fdpName: 'Damascus',
+        cycles: [
+          createCycle({
+            cycleId: 'cycle-20',
+            cycleCode: 3301,
+            cycleName: 'SFA - May'
+          })
+        ],
+        families: [
+          createFamily({
+            familyUniqueCode: 700001,
+            fdpName: 'FDP-H',
+            cycles: [{ code: 3301, quantity: '1' }],
+            members: [
+              createMember({
+                id: 101,
+                family: 700001,
+                role: 'Principle',
+                firstName: 'A',
+                lastName: 'One',
+                documentNumber: 'DOC-101'
+              })
+            ]
+          }),
+          createFamily({
+            familyUniqueCode: 700002,
+            fdpName: 'FDP-H',
+            cycles: [{ code: 3301, quantity: '1' }],
+            members: [
+              createMember({
+                id: 102,
+                family: 700002,
+                role: 'Principle',
+                firstName: 'B',
+                lastName: 'Two',
+                documentNumber: 'DOC-102'
+              })
+            ]
+          })
+        ]
+      })
+    );
 
     await service.saveDistributionEvent({
       familyUniqueCode: 700001,

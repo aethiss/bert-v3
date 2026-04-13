@@ -6,9 +6,11 @@ import { registerAuthIpc } from './ipc/authIpc';
 import { registerConfigIpc } from './ipc/configIpc';
 import { registerEligibleDataIpc } from './ipc/eligibleDataIpc';
 import { registerInstallerIpc } from './ipc/installerIpc';
+import { registerUpdaterIpc } from './ipc/updaterIpc';
 import { createRuntimeConfigService } from './services/configService';
 import { createEligibleDataService } from './services/eligibleDataService';
 import { loadDotEnvFromKnownLocations } from './services/envService';
+import { createUpdateService } from './services/updateService';
 import { createUserService } from './services/userService';
 import { createLocalApiServer } from './server/localApiServer';
 
@@ -77,14 +79,20 @@ async function bootstrap(): Promise<void> {
   const configService = createRuntimeConfigService(appDatabase.connection);
   const userService = createUserService(appDatabase.connection);
   const eligibleDataService = createEligibleDataService(appDatabase.connection);
+  const updateService = createUpdateService({
+    getPendingDistributionCount: () => eligibleDataService.getPendingDistributionCount()
+  });
   const localApiServer = createLocalApiServer({ eligibleDataService });
   registerInstallerIpc(configService);
   registerConfigIpc(configService, localApiServer, eligibleDataService);
   registerAuthIpc(() => mainWindow, userService);
   registerEligibleDataIpc(eligibleDataService);
+  registerUpdaterIpc(updateService);
   await createMainWindow();
+  updateService.start();
 
   app.on('before-quit', () => {
+    updateService.dispose();
     void localApiServer.stop();
     void appDatabase.close();
   });

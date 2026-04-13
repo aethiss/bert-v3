@@ -57,13 +57,7 @@ export function Distribution({ route, onNavigate, session }: ClientDistributionP
   const scanBufferRef = useRef('');
   const scanTimerRef = useRef<number | null>(null);
 
-  const filteredMembers = (() => {
-    if (!detail || selectedCycleCode === null) {
-      return [];
-    }
-
-    return detail.members.filter((member) => member.cycleCode === selectedCycleCode);
-  })();
+  const filteredMembers = detail?.members ?? [];
 
   const selectedMember = (() => {
     return filteredMembers.find((member) => member.memberId === selectedMemberId) ?? null;
@@ -195,8 +189,7 @@ export function Distribution({ route, onNavigate, session }: ClientDistributionP
     try {
       const detailData = await getDistributionDetailFromLocalServer(session, {
         memberId: result.member.id,
-        cycleCode: result.member.cycleCode,
-        familyHhId: result.member.familyHhId
+        familyUniqueCode: result.member.familyUniqueCode
       });
 
       if (!detailData) {
@@ -206,9 +199,9 @@ export function Distribution({ route, onNavigate, session }: ClientDistributionP
         return;
       }
 
-      const defaultCycle = detailData.activeCycles[0]?.cycleCode ?? result.member.cycleCode;
+      const defaultCycle = detailData.activeCycles[0]?.cycleCode ?? null;
       const defaultMember = detailData.members.find((member) => member.memberId === result.member.id);
-      const fallbackMember = detailData.members.find((member) => member.cycleCode === defaultCycle);
+      const fallbackMember = detailData.members[0] ?? null;
 
       setDetail(detailData);
       setSelectedCycleCode(defaultCycle);
@@ -514,10 +507,6 @@ export function Distribution({ route, onNavigate, session }: ClientDistributionP
                         checked={selectedCycleCode === cycle.cycleCode}
                         onChange={() => {
                           setSelectedCycleCode(cycle.cycleCode);
-                          const fallbackMember = detail.members.find(
-                            (member) => member.cycleCode === cycle.cycleCode
-                          );
-                          setSelectedMemberId(fallbackMember?.memberId ?? null);
                         }}
                       />
                     </td>
@@ -543,7 +532,7 @@ export function Distribution({ route, onNavigate, session }: ClientDistributionP
               </thead>
               <tbody>
                 {filteredMembers.map((member) => (
-                  <tr key={`${member.memberId}-${member.cycleCode}`}>
+                  <tr key={member.memberId}>
                     <td>
                       <input
                         type="radio"

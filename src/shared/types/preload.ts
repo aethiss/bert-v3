@@ -12,6 +12,7 @@ import type {
 } from './eligible';
 import type { CiamLoginResult, ExchangeCodeResult } from './ipc/auth';
 import type { InstallerModeState } from './ipc/installer';
+import type { UpdaterState } from './ipc/updater';
 import type {
   ClientConnectionSettings,
   LocalServerInterfaceInfo,
@@ -37,6 +38,13 @@ export interface BertAppApi {
     getModeState(): Promise<InstallerModeState>;
     setMode(mode: AppMode): Promise<InstallerModeState>;
   };
+  updater: {
+    getState(): Promise<UpdaterState>;
+    checkForUpdates(): Promise<UpdaterState>;
+    downloadUpdate(): Promise<UpdaterState>;
+    installUpdate(): Promise<void>;
+    onStateChanged(listener: (state: UpdaterState) => void): () => void;
+  };
   config: {
     getPrintSettings(): Promise<PrintSettings>;
     setPrintSettings(settings: PrintSettings): Promise<PrintSettings>;
@@ -61,8 +69,7 @@ export interface BertAppApi {
     searchDistributionMember(query: string): Promise<DistributionSearchResult | null>;
     getDistributionDetail(params: {
       memberId: number;
-      cycleCode: number;
-      familyHhId: string;
+      familyUniqueCode: number;
     }): Promise<DistributionDetailData | null>;
     saveDistributionEvent(payload: LocalDistributionEventInput): Promise<{ id: number }>;
     getDistributionQueue(): Promise<DistributionQueueItem[]>;

@@ -1,3 +1,15 @@
+export interface EligibleFoodCommodityApiModel {
+  id: number;
+  unique_id: string;
+  en_name: string;
+  ar_name: string;
+  description: string | null;
+  kcal: number | null;
+  unit: string | null;
+  quantity: number | null;
+  weight: number | null;
+}
+
 export interface EligibleCycleApiModel {
   cycleId: string;
   cycleCode: number;
@@ -9,30 +21,30 @@ export interface EligibleCycleApiModel {
   cycleName: string;
   cycleNote: string | null;
   household_count: number;
-  households?: EligibleHouseholdApiModel[];
+  foodCommodities?: EligibleFoodCommodityApiModel[];
 }
 
-export interface EligibleHouseholdApiModel {
-  hhId: string;
-  cycleCode: number;
-  assignedStatus: string;
-  householdSize: string;
+export interface EligibleFamilyCycleApiModel {
+  code: number;
   quantity: string;
-  assistancePackageName: string;
-  cooperatingPartner: string | null;
-  fdp_id: string;
-  fdp_name: string;
-  Number_of_Children_between_6_and_23_Months: number;
-  FamilyUniqueCode: number;
+}
+
+export interface EligibleFamilyApiModel {
+  FamilyUniqueCode: number | string;
   address: string | null;
   status: string;
   eligible: boolean;
+  fdp_id: string;
+  fdp_name: string;
+  Number_of_Children_between_6_and_23_Months: number;
   members?: EligibleMemberApiModel[];
+  distributionHistory?: Array<Record<string, unknown>>;
+  cycles?: EligibleFamilyCycleApiModel[];
 }
 
 export interface EligibleMemberApiModel {
   id: number;
-  family: number;
+  family: number | string;
   role: string | null;
   firstName: string | null;
   lastName: string | null;
@@ -42,7 +54,6 @@ export interface EligibleMemberApiModel {
   cityOfBirth: string | null;
   dateOfBirth: string | null;
   documentNumber: string | null;
-  cycleCode: number;
   status: string;
 }
 
@@ -52,6 +63,7 @@ export interface EligibleMembersApiResponse {
   total_households: number;
   total_cycles: number;
   cycles: EligibleCycleApiModel[];
+  families: EligibleFamilyApiModel[];
 }
 
 export interface EligibleCycleSummary {
@@ -79,8 +91,6 @@ export type DistributionSearchMatch = 'familyUniqueCode' | 'documentNumber';
 
 export interface DistributionSearchMember {
   id: number;
-  cycleCode: number;
-  familyHhId: string;
   fullName: string;
   role: string | null;
   documentNumber: string | null;
@@ -94,8 +104,6 @@ export interface DistributionSearchResult {
 
 export interface DistributionHouseholdInfo {
   familyUniqueCode: number;
-  familyHhId: string;
-  cycleCode: number;
   idmId: string;
   booklet: string;
   principle: string;
@@ -116,7 +124,6 @@ export interface DistributionActiveCycle {
 
 export interface DistributionHouseholdMember {
   memberId: number;
-  cycleCode: number;
   fullName: string;
   documentNumber: string | null;
   age: number | null;

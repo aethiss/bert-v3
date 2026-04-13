@@ -125,12 +125,11 @@ export async function searchMemberOnLocalServer(
 
 export async function getDistributionDetailFromLocalServer(
   session: ClientSession,
-  params: { memberId: number; cycleCode: number; familyHhId: string }
+  params: { memberId: number; familyUniqueCode: number }
 ): Promise<DistributionDetailData | null> {
   const url = new URL(`http://${session.host}/distribution/detail`);
   url.searchParams.set('memberId', String(params.memberId));
-  url.searchParams.set('cycleCode', String(params.cycleCode));
-  url.searchParams.set('familyHhId', params.familyHhId);
+  url.searchParams.set('familyUniqueCode', String(params.familyUniqueCode));
 
   const response = await fetch(url.toString(), {
     method: 'GET',

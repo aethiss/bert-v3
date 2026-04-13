@@ -42,6 +42,7 @@ import {
 import { showErrorToast } from '@renderer/lib/errorToast';
 import { isRtkLikeError, toErrorMessage } from '@renderer/lib/errorMessage';
 import { getLanguage, getLocalServerStatus, saveLanguage } from '@renderer/services/configService';
+import { AppUpdateNotifications } from '@renderer/components/shared/AppUpdateNotifications';
 import { LocaleContext } from '@renderer/i18n/localeContext';
 import { MESSAGES_BY_LOCALE } from '@renderer/i18n/messages';
 
@@ -439,6 +440,7 @@ export function App() {
   return (
     <IntlProvider locale={locale} messages={MESSAGES_BY_LOCALE[locale]} defaultLocale="en">
       <LocaleContext.Provider value={localeContextValue}>
+        <AppUpdateNotifications />
         {appContent}
         <InstallerModeModal
           isOpen={!installerModeSetup.isLoading && !installerModeSetup.isLocked}

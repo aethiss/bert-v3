@@ -242,19 +242,17 @@ export function createLocalApiServer(deps: LocalApiServerDependencies): LocalApi
 
     if (method === 'GET' && url.pathname === '/distribution/detail') {
       const memberIdRaw = Number(url.searchParams.get('memberId'));
-      const cycleCodeRaw = Number(url.searchParams.get('cycleCode'));
-      const familyHhId = (url.searchParams.get('familyHhId') ?? '').trim();
-      if (!Number.isFinite(memberIdRaw) || !Number.isFinite(cycleCodeRaw) || !familyHhId) {
+      const familyUniqueCodeRaw = Number(url.searchParams.get('familyUniqueCode'));
+      if (!Number.isFinite(memberIdRaw) || !Number.isFinite(familyUniqueCodeRaw)) {
         sendJson(res, 400, {
-          error: 'Missing or invalid memberId, cycleCode or familyHhId query parameters.'
+          error: 'Missing or invalid memberId or familyUniqueCode query parameters.'
         });
         return;
       }
 
       const detail = await deps.eligibleDataService.getDistributionDetail({
         memberId: memberIdRaw,
-        cycleCode: cycleCodeRaw,
-        familyHhId
+        familyUniqueCode: familyUniqueCodeRaw
       });
       sendJson(res, 200, { result: detail });
       return;

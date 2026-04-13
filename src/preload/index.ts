@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import type { AppMode } from '../shared/types/appMode';
 import type { InstallerModeState } from '../shared/types/ipc/installer';
+import type { UpdaterState } from '../shared/types/ipc/updater';
 import type {
   ClientConnectionSettings,
   LocalServerInterfaceInfo,
@@ -10,6 +11,8 @@ import type {
 import type { PrintSettings } from '../shared/types/printConfig';
 import type { SupportedLocale } from '../shared/types/language';
 import type { BertAppApi } from '../shared/types/preload';
+
+const UPDATER_STATE_CHANGED_CHANNEL = 'updater:stateChanged';
 
 const bertAppApi: BertAppApi = {
   version: '0.4.0',
@@ -39,6 +42,30 @@ const bertAppApi: BertAppApi = {
     },
     setMode(mode: AppMode) {
       return ipcRenderer.invoke('installer:setMode', mode) as Promise<InstallerModeState>;
+    }
+  },
+  updater: {
+    getState() {
+      return ipcRenderer.invoke('updater:getState') as Promise<UpdaterState>;
+    },
+    checkForUpdates() {
+      return ipcRenderer.invoke('updater:checkForUpdates') as Promise<UpdaterState>;
+    },
+    downloadUpdate() {
+      return ipcRenderer.invoke('updater:downloadUpdate') as Promise<UpdaterState>;
+    },
+    installUpdate() {
+      return ipcRenderer.invoke('updater:installUpdate') as Promise<void>;
+    },
+    onStateChanged(listener: (state: UpdaterState) => void) {
+      const wrappedListener = (_event: Electron.IpcRendererEvent, state: UpdaterState) => {
+        listener(state);
+      };
+
+      ipcRenderer.on(UPDATER_STATE_CHANGED_CHANNEL, wrappedListener);
+      return () => {
+        ipcRenderer.removeListener(UPDATER_STATE_CHANGED_CHANNEL, wrappedListener);
+      };
     }
   },
   config: {

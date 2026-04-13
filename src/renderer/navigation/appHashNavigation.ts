@@ -44,6 +44,7 @@ function parseServerRoute(segments: string[]): ServerRouteState {
       rawTab === 'printer' ||
       rawTab === 'log' ||
       rawTab === 'language' ||
+      rawTab === 'updates' ||
       rawTab === 'developer'
         ? rawTab
         : 'server';
@@ -85,7 +86,10 @@ function parseClientRoute(segments: string[]): ClientRouteState {
   if (section === 'configuration') {
     const rawTab = segments[2];
     const configurationTab =
-      rawTab === 'connection' || rawTab === 'printer' || rawTab === 'developer'
+      rawTab === 'connection' ||
+      rawTab === 'printer' ||
+      rawTab === 'updates' ||
+      rawTab === 'developer'
         ? rawTab
         : 'connection';
 

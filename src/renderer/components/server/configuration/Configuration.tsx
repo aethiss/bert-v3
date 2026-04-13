@@ -24,6 +24,7 @@ import type {
   ServerRouteComponentProps
 } from '@renderer/components/server/types';
 import { LanguageSettings } from '@renderer/components/server/configuration/LanguageSettings';
+import { UpdateSettings } from '@renderer/components/shared/configuration/UpdateSettings';
 import type { AppMode } from '@shared/types/appMode';
 import type { LocalServerInterfaceInfo, LocalServerSettings } from '@shared/types/localServer';
 import type { PrintFormat } from '@shared/types/printConfig';
@@ -286,6 +287,13 @@ export function Configuration({ route, onNavigate }: ServerRouteComponentProps) 
           </button>
           <button
             type="button"
+            className={route.configurationTab === 'updates' ? 'configuration-tab active' : 'configuration-tab'}
+            onClick={() => navigateToConfigurationTab(route, onNavigate, 'updates')}
+          >
+            {intl.formatMessage({ id: 'config.tabs.updates' })}
+          </button>
+          <button
+            type="button"
             className={route.configurationTab === 'developer' ? 'configuration-tab active' : 'configuration-tab'}
             onClick={() => navigateToConfigurationTab(route, onNavigate, 'developer')}
           >
@@ -480,6 +488,10 @@ export function Configuration({ route, onNavigate }: ServerRouteComponentProps) 
 
         {route.configurationTab === 'language' ? (
           <LanguageSettings />
+        ) : null}
+
+        {route.configurationTab === 'updates' ? (
+          <UpdateSettings />
         ) : null}
 
         {route.configurationTab === 'developer' ? (

@@ -8,3 +8,5 @@ output
 POC
 agents
 .env
+docs
+build/runtime

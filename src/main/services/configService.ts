@@ -288,6 +288,8 @@ export function createRuntimeConfigService(db: Database): RuntimeConfigService {
     try {
       await db.run('DELETE FROM distribution_queue');
       await db.run('DELETE FROM client_distribution_history');
+      await db.run('DELETE FROM cycle_food_commodities');
+      await db.run('DELETE FROM distribution_list');
       await db.run('DELETE FROM members');
       await db.run('DELETE FROM families');
       await db.run('DELETE FROM cycles');

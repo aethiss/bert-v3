@@ -8,6 +8,8 @@ import type {
   DistributionQueueItem,
   DistributionActiveCycle,
   DistributionDetailData,
+  EligibleFoodCommodityApiModel,
+  EligibleFamilyApiModel,
   DistributionHouseholdInfo,
   DistributionHouseholdMember,
   DistributionSearchMember,
@@ -25,6 +27,19 @@ function asNumber(value: unknown, fallback = 0): number {
 
 function asNullableNumber(value: unknown): number | null {
   return typeof value === 'number' && Number.isFinite(value) ? value : null;
+}
+
+function asNullableNumericLike(value: unknown): number | null {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value;
+  }
+
+  if (typeof value === 'string' && value.trim()) {
+    const parsed = Number(value.trim());
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+
+  return null;
 }
 
 function asText(value: unknown, fallback = ''): string {
@@ -122,8 +137,7 @@ export interface EligibleDataService {
   searchDistributionMember(query: string): Promise<DistributionSearchResult | null>;
   getDistributionDetail(params: {
     memberId: number;
-    cycleCode: number;
-    familyHhId: string;
+    familyUniqueCode: number;
   }): Promise<DistributionDetailData | null>;
   saveDistributionEvent(payload: LocalDistributionEventInput): Promise<{ id: number }>;
   saveClientDistribution(payload: ClientDistributionInput): Promise<{ id: number }>;
@@ -132,6 +146,7 @@ export interface EligibleDataService {
     query: ClientDistributionHistoryQuery
   ): Promise<ClientDistributionHistoryResult>;
   getDistributionQueue(): Promise<DistributionQueueItem[]>;
+  getPendingDistributionCount(): Promise<number>;
   getOperationsAggregates(query: OperationsDashboardQuery): Promise<{
     totalDistributions: number;
     cycleProgress: Array<{
@@ -174,8 +189,6 @@ export interface EligibleDataService {
 }
 
 interface DistributionMemberRow extends DistributionSearchMember {
-  cycleCode: number;
-  familyHhId: string;
   firstName: string | null;
   lastName: string | null;
 }
@@ -191,7 +204,6 @@ interface DistributionActiveCycleRow {
 
 interface DistributionHouseholdMemberRow {
   memberId: number;
-  cycleCode: number;
   firstName: string | null;
   lastName: string | null;
   documentNumber: string | null;
@@ -201,9 +213,6 @@ interface DistributionHouseholdMemberRow {
 
 interface DistributionHouseholdInfoRow {
   familyUniqueCode: number;
-  familyHhId: string;
-  cycleCode: number;
-  quantity: string;
   children623: number;
   updatedAt: string | null;
 }
@@ -235,6 +244,28 @@ export function pickPreferredDistributionMember(
   }
 
   return rows.find((row) => isPrincipleRole(row.role)) ?? rows[0];
+}
+
+function toSafeInteger(value: unknown): number | null {
+  const parsed = asNullableNumericLike(value);
+  if (parsed === null || !Number.isSafeInteger(parsed)) {
+    return null;
+  }
+
+  return parsed;
+}
+
+function asRealNumber(value: unknown): number | null {
+  const parsed = asNullableNumericLike(value);
+  return parsed === null ? null : parsed;
+}
+
+function normalizeFamilyUniqueCode(family: EligibleFamilyApiModel): number | null {
+  return toSafeInteger(family.FamilyUniqueCode);
+}
+
+function normalizeCommodityId(commodity: EligibleFoodCommodityApiModel): number | null {
+  return toSafeInteger(commodity.id);
 }
 
 export function createEligibleDataService(db: Database): EligibleDataService {
@@ -270,6 +301,8 @@ export function createEligibleDataService(db: Database): EligibleDataService {
   async function clearEligibleData(): Promise<void> {
     await db.exec('BEGIN TRANSACTION');
     try {
+      await db.run('DELETE FROM cycle_food_commodities');
+      await db.run('DELETE FROM distribution_list');
       await db.run('DELETE FROM members');
       await db.run('DELETE FROM families');
       await db.run('DELETE FROM cycles');
@@ -286,21 +319,27 @@ export function createEligibleDataService(db: Database): EligibleDataService {
   ): Promise<EligibleOverviewSummary> {
     await db.exec('BEGIN TRANSACTION');
     try {
+      await db.run('DELETE FROM cycle_food_commodities');
+      await db.run('DELETE FROM distribution_list');
       await db.run('DELETE FROM members');
       await db.run('DELETE FROM families');
       await db.run('DELETE FROM cycles');
       await db.run('DELETE FROM eligible_meta');
 
       let skippedCycles = 0;
+      let skippedCycleFoodCommodities = 0;
       let skippedFamilies = 0;
+      let skippedFamilyCycles = 0;
       let skippedMembers = 0;
+      const validCycleCodes = new Set<number>();
 
       for (const cycle of payload.cycles ?? []) {
-        const cycleCode = asNullableNumber(cycle.cycleCode);
+        const cycleCode = toSafeInteger(cycle.cycleCode);
         if (cycleCode === null) {
           skippedCycles += 1;
           continue;
         }
+        validCycleCodes.add(cycleCode);
 
         await db.run(
           `
@@ -333,100 +372,166 @@ export function createEligibleDataService(db: Database): EligibleDataService {
           asNumber(cycle.household_count)
         );
 
-        for (const household of cycle.households ?? []) {
-          const householdCycleCode = asNullableNumber(household.cycleCode) ?? cycleCode;
-          const householdId = asText(household.hhId);
-          if (householdCycleCode === null || householdId.length === 0) {
-            skippedFamilies += 1;
+        for (const commodity of cycle.foodCommodities ?? []) {
+          const commodityId = normalizeCommodityId(commodity);
+          if (commodityId === null) {
+            skippedCycleFoodCommodities += 1;
             continue;
           }
 
           await db.run(
             `
-            INSERT INTO families (
-              hh_id, cycle_code, assigned_status, household_size, quantity, assistance_package_name,
-              cooperating_partner, fdp_id, fdp_name, children_6_23_months, family_unique_code,
-              address, status, eligible
+            INSERT INTO cycle_food_commodities (
+              cycle_code,
+              commodity_id,
+              unique_id,
+              en_name,
+              ar_name,
+              description,
+              kcal,
+              unit,
+              quantity,
+              weight
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ON CONFLICT(hh_id, cycle_code) DO UPDATE SET
-              cycle_code = excluded.cycle_code,
-              assigned_status = excluded.assigned_status,
-              household_size = excluded.household_size,
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(cycle_code, commodity_id) DO UPDATE SET
+              unique_id = excluded.unique_id,
+              en_name = excluded.en_name,
+              ar_name = excluded.ar_name,
+              description = excluded.description,
+              kcal = excluded.kcal,
+              unit = excluded.unit,
               quantity = excluded.quantity,
-              assistance_package_name = excluded.assistance_package_name,
-              cooperating_partner = excluded.cooperating_partner,
-              fdp_id = excluded.fdp_id,
-              fdp_name = excluded.fdp_name,
-              children_6_23_months = excluded.children_6_23_months,
-              family_unique_code = excluded.family_unique_code,
-              address = excluded.address,
-              status = excluded.status,
-              eligible = excluded.eligible,
+              weight = excluded.weight,
               updated_at = CURRENT_TIMESTAMP
             `,
-            householdId,
-            householdCycleCode,
-            asText(household.assignedStatus),
-            asText(household.householdSize),
-            asText(household.quantity),
-            asText(household.assistancePackageName),
-            asNullableText(household.cooperatingPartner),
-            asText(household.fdp_id),
-            asText(household.fdp_name),
-            asNumber(household.Number_of_Children_between_6_and_23_Months),
-            asNumber(household.FamilyUniqueCode),
-            asNullableText(household.address),
-            asText(household.status),
-            household.eligible ? 1 : 0
+            cycleCode,
+            commodityId,
+            asText(commodity.unique_id),
+            asText(commodity.en_name),
+            asText(commodity.ar_name),
+            asNullableText(commodity.description),
+            asRealNumber(commodity.kcal),
+            asNullableText(commodity.unit),
+            asRealNumber(commodity.quantity),
+            asRealNumber(commodity.weight)
           );
+        }
+      }
 
-          for (const member of household.members ?? []) {
-            const memberId = asNullableNumber(member.id);
-            const memberCycleCode =
-              asNullableNumber(member.cycleCode) ?? householdCycleCode ?? cycleCode;
-            if (memberId === null || memberCycleCode === null) {
-              skippedMembers += 1;
-              continue;
-            }
+      for (const family of payload.families ?? []) {
+        const familyUniqueCode = normalizeFamilyUniqueCode(family);
+        if (familyUniqueCode === null) {
+          skippedFamilies += 1;
+          continue;
+        }
 
-            await db.run(
-              `
-              INSERT INTO members (
-                member_id, cycle_code, family_hh_id, role, first_name, last_name,
-                father_name, mother_name, mother_last_name, city_of_birth,
-                date_of_birth, document_number, status
-              )
-              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-              ON CONFLICT(member_id, cycle_code) DO UPDATE SET
-                family_hh_id = excluded.family_hh_id,
-                role = excluded.role,
-                first_name = excluded.first_name,
-                last_name = excluded.last_name,
-                father_name = excluded.father_name,
-                mother_name = excluded.mother_name,
-                mother_last_name = excluded.mother_last_name,
-                city_of_birth = excluded.city_of_birth,
-                date_of_birth = excluded.date_of_birth,
-                document_number = excluded.document_number,
-                status = excluded.status,
-                updated_at = CURRENT_TIMESTAMP
-              `,
-              memberId,
-              memberCycleCode,
-              householdId,
-              asNullableText(member.role),
-              asNullableText(member.firstName),
-              asNullableText(member.lastName),
-              asNullableText(member.fatherName),
-              asNullableText(member.motherName),
-              asNullableText(member.motherLastName),
-              asNullableText(member.cityOfBirth),
-              asNullableText(member.dateOfBirth),
-              asNullableText(member.documentNumber),
-              asText(member.status)
-            );
+        await db.run(
+          `
+          INSERT INTO families (
+            family_unique_code,
+            address,
+            status,
+            eligible,
+            fdp_id,
+            fdp_name,
+            children_6_23_months
+          )
+          VALUES (?, ?, ?, ?, ?, ?, ?)
+          ON CONFLICT(family_unique_code) DO UPDATE SET
+            address = excluded.address,
+            status = excluded.status,
+            eligible = excluded.eligible,
+            fdp_id = excluded.fdp_id,
+            fdp_name = excluded.fdp_name,
+            children_6_23_months = excluded.children_6_23_months,
+            updated_at = CURRENT_TIMESTAMP
+          `,
+          familyUniqueCode,
+          asNullableText(family.address),
+          asText(family.status),
+          family.eligible ? 1 : 0,
+          asText(family.fdp_id),
+          asText(family.fdp_name),
+          asNumber(family.Number_of_Children_between_6_and_23_Months)
+        );
+
+        for (const familyCycle of family.cycles ?? []) {
+          const cycleCode = toSafeInteger(familyCycle.code);
+          if (cycleCode === null || !validCycleCodes.has(cycleCode)) {
+            skippedFamilyCycles += 1;
+            continue;
           }
+
+          await db.run(
+            `
+            INSERT INTO distribution_list (
+              family_unique_code,
+              cycle_code,
+              quantity
+            )
+            VALUES (?, ?, ?)
+            ON CONFLICT(family_unique_code, cycle_code) DO UPDATE SET
+              quantity = excluded.quantity,
+              updated_at = CURRENT_TIMESTAMP
+            `,
+            familyUniqueCode,
+            cycleCode,
+            asText(familyCycle.quantity, '1')
+          );
+        }
+
+        for (const member of family.members ?? []) {
+          const memberId = toSafeInteger(member.id);
+          if (memberId === null) {
+            skippedMembers += 1;
+            continue;
+          }
+
+          await db.run(
+            `
+            INSERT INTO members (
+              member_id,
+              family_unique_code,
+              role,
+              first_name,
+              last_name,
+              father_name,
+              mother_name,
+              mother_last_name,
+              city_of_birth,
+              date_of_birth,
+              document_number,
+              status
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(member_id) DO UPDATE SET
+              family_unique_code = excluded.family_unique_code,
+              role = excluded.role,
+              first_name = excluded.first_name,
+              last_name = excluded.last_name,
+              father_name = excluded.father_name,
+              mother_name = excluded.mother_name,
+              mother_last_name = excluded.mother_last_name,
+              city_of_birth = excluded.city_of_birth,
+              date_of_birth = excluded.date_of_birth,
+              document_number = excluded.document_number,
+              status = excluded.status,
+              updated_at = CURRENT_TIMESTAMP
+            `,
+            memberId,
+            familyUniqueCode,
+            asNullableText(member.role),
+            asNullableText(member.firstName),
+            asNullableText(member.lastName),
+            asNullableText(member.fatherName),
+            asNullableText(member.motherName),
+            asNullableText(member.motherLastName),
+            asNullableText(member.cityOfBirth),
+            asNullableText(member.dateOfBirth),
+            asNullableText(member.documentNumber),
+            asText(member.status)
+          );
         }
       }
 
@@ -450,9 +555,15 @@ export function createEligibleDataService(db: Database): EligibleDataService {
       );
 
       await db.exec('COMMIT');
-      if (skippedCycles > 0 || skippedFamilies > 0 || skippedMembers > 0) {
+      if (
+        skippedCycles > 0 ||
+        skippedCycleFoodCommodities > 0 ||
+        skippedFamilies > 0 ||
+        skippedFamilyCycles > 0 ||
+        skippedMembers > 0
+      ) {
         console.warn(
-          `[eligibleData] Skipped invalid records during sync: cycles=${skippedCycles}, families=${skippedFamilies}, members=${skippedMembers}`
+          `[eligibleData] Skipped invalid records during sync: cycles=${skippedCycles}, commodities=${skippedCycleFoodCommodities}, families=${skippedFamilies}, familyCycles=${skippedFamilyCycles}, members=${skippedMembers}`
         );
       }
       return buildOverviewSummaryFromPayload(payload, membersCount);
@@ -484,27 +595,13 @@ export function createEligibleDataService(db: Database): EligibleDataService {
             m.member_id as id,
             m.role as role,
             m.document_number as documentNumber,
-            f.family_unique_code as familyUniqueCode,
-            m.cycle_code as cycleCode,
-            m.family_hh_id as familyHhId,
+            m.family_unique_code as familyUniqueCode,
             m.first_name as firstName,
             m.last_name as lastName
           FROM members m
-          INNER JOIN families f
-            ON f.hh_id = m.family_hh_id
-            AND f.cycle_code = m.cycle_code
-          WHERE f.family_unique_code = ?
-            AND m.cycle_code = (
-              SELECT MAX(m2.cycle_code)
-              FROM members m2
-              INNER JOIN families f2
-                ON f2.hh_id = m2.family_hh_id
-                AND f2.cycle_code = m2.cycle_code
-              WHERE f2.family_unique_code = ?
-            )
+          WHERE m.family_unique_code = ?
           ORDER BY m.member_id ASC
           `,
-          familyUniqueCode,
           familyUniqueCode
         );
 
@@ -514,8 +611,6 @@ export function createEligibleDataService(db: Database): EligibleDataService {
             match: 'familyUniqueCode',
             member: {
               id: preferredFamilyMember.id,
-              cycleCode: preferredFamilyMember.cycleCode,
-              familyHhId: preferredFamilyMember.familyHhId,
               fullName: toDisplayName(
                 preferredFamilyMember.firstName,
                 preferredFamilyMember.lastName
@@ -535,17 +630,12 @@ export function createEligibleDataService(db: Database): EligibleDataService {
         m.member_id as id,
         m.role as role,
         m.document_number as documentNumber,
-        f.family_unique_code as familyUniqueCode,
-        m.cycle_code as cycleCode,
-        m.family_hh_id as familyHhId,
+        m.family_unique_code as familyUniqueCode,
         m.first_name as firstName,
         m.last_name as lastName
       FROM members m
-      INNER JOIN families f
-        ON f.hh_id = m.family_hh_id
-        AND f.cycle_code = m.cycle_code
       WHERE LOWER(TRIM(m.document_number)) = LOWER(TRIM(?))
-      ORDER BY m.cycle_code DESC, m.member_id ASC
+      ORDER BY m.member_id ASC
       LIMIT 1
       `,
       normalizedQuery
@@ -559,8 +649,6 @@ export function createEligibleDataService(db: Database): EligibleDataService {
       match: 'documentNumber',
       member: {
         id: memberByDocument.id,
-        cycleCode: memberByDocument.cycleCode,
-        familyHhId: memberByDocument.familyHhId,
         fullName: toDisplayName(memberByDocument.firstName, memberByDocument.lastName),
         role: memberByDocument.role,
         documentNumber: memberByDocument.documentNumber,
@@ -571,10 +659,9 @@ export function createEligibleDataService(db: Database): EligibleDataService {
 
   async function getDistributionDetail(params: {
     memberId: number;
-    cycleCode: number;
-    familyHhId: string;
+    familyUniqueCode: number;
   }): Promise<DistributionDetailData | null> {
-    if (!params.memberId || !params.cycleCode || !params.familyHhId) {
+    if (!params.memberId || !params.familyUniqueCode) {
       return null;
     }
 
@@ -582,17 +669,13 @@ export function createEligibleDataService(db: Database): EligibleDataService {
       `
       SELECT
         family_unique_code as familyUniqueCode,
-        hh_id as familyHhId,
-        cycle_code as cycleCode,
-        quantity as quantity,
         children_6_23_months as children623,
         updated_at as updatedAt
       FROM families
-      WHERE hh_id = ? AND cycle_code = ?
+      WHERE family_unique_code = ?
       LIMIT 1
       `,
-      params.familyHhId,
-      params.cycleCode
+      params.familyUniqueCode
     );
 
     if (!householdRow) {
@@ -605,34 +688,29 @@ export function createEligibleDataService(db: Database): EligibleDataService {
         first_name as firstName,
         last_name as lastName
       FROM members
-      WHERE family_hh_id = ?
-        AND cycle_code = ?
+      WHERE family_unique_code = ?
         AND (LOWER(TRIM(role)) = 'principle' OR LOWER(TRIM(role)) = 'principal')
       ORDER BY member_id ASC
       LIMIT 1
       `,
-      householdRow.familyHhId,
-      householdRow.cycleCode
+      householdRow.familyUniqueCode
     );
 
     const fallbackMember = await db.get<DistributionHouseholdMemberRow>(
       `
       SELECT
         member_id as memberId,
-        cycle_code as cycleCode,
         first_name as firstName,
         last_name as lastName,
         document_number as documentNumber,
         date_of_birth as dateOfBirth,
         role as role
       FROM members
-      WHERE family_hh_id = ?
-        AND cycle_code = ?
+      WHERE family_unique_code = ?
       ORDER BY member_id ASC
       LIMIT 1
       `,
-      householdRow.familyHhId,
-      householdRow.cycleCode
+      householdRow.familyUniqueCode
     );
 
     const activeCycleRows = await db.all<DistributionActiveCycleRow[]>(
@@ -641,12 +719,12 @@ export function createEligibleDataService(db: Database): EligibleDataService {
         c.cycle_code as cycleCode,
         c.cycle_name as cycleName,
         c.assistance_package_name as assistanceType,
-        f.quantity as quantity,
+        dl.quantity as quantity,
         c.start_date as startDate,
         c.end_date as endDate
-      FROM families f
-      INNER JOIN cycles c ON c.cycle_code = f.cycle_code
-      WHERE f.family_unique_code = ?
+      FROM distribution_list dl
+      INNER JOIN cycles c ON c.cycle_code = dl.cycle_code
+      WHERE dl.family_unique_code = ?
       ORDER BY c.cycle_code DESC
       `,
       householdRow.familyUniqueCode
@@ -656,24 +734,20 @@ export function createEligibleDataService(db: Database): EligibleDataService {
       `
       SELECT
         m.member_id as memberId,
-        m.cycle_code as cycleCode,
         m.first_name as firstName,
         m.last_name as lastName,
         m.document_number as documentNumber,
         m.date_of_birth as dateOfBirth,
         m.role as role
       FROM members m
-      INNER JOIN families f ON f.hh_id = m.family_hh_id AND f.cycle_code = m.cycle_code
-      WHERE f.family_unique_code = ?
-      ORDER BY m.cycle_code DESC, m.member_id ASC
+      WHERE m.family_unique_code = ?
+      ORDER BY m.member_id ASC
       `,
       householdRow.familyUniqueCode
     );
 
     const household: DistributionHouseholdInfo = {
       familyUniqueCode: householdRow.familyUniqueCode,
-      familyHhId: householdRow.familyHhId,
-      cycleCode: householdRow.cycleCode,
       idmId: String(params.memberId),
       booklet: String(householdRow.familyUniqueCode),
       principle: toDisplayName(
@@ -682,8 +756,8 @@ export function createEligibleDataService(db: Database): EligibleDataService {
       ),
       phone: 'N/A',
       registrationDate: formatDate(householdRow.updatedAt, '26-Jan-2025'),
-      pbwgs: householdRow.quantity || '1',
-      children623: asNumber(householdRow.children623),
+      pbwgs: activeCycleRows[0]?.quantity || '1',
+      children623: asNumber(householdRow.children623)
     };
 
     const activeCycles: DistributionActiveCycle[] = activeCycleRows.map((row) => ({
@@ -697,7 +771,6 @@ export function createEligibleDataService(db: Database): EligibleDataService {
 
     const members: DistributionHouseholdMember[] = memberRows.map((row) => ({
       memberId: row.memberId,
-      cycleCode: row.cycleCode,
       fullName: toDisplayName(row.firstName, row.lastName),
       documentNumber: row.documentNumber,
       age: computeAge(row.dateOfBirth),
@@ -1121,17 +1194,12 @@ export function createEligibleDataService(db: Database): EligibleDataService {
     const familyRow = await db.get<{ familyUniqueCode: number }>(
       `
       SELECT
-        f.family_unique_code as familyUniqueCode
+        m.family_unique_code as familyUniqueCode
       FROM members m
-      INNER JOIN families f
-        ON f.hh_id = m.family_hh_id
-        AND f.cycle_code = m.cycle_code
       WHERE m.member_id = ?
-        AND m.cycle_code = ?
       LIMIT 1
       `,
-      payload.memberId,
-      payload.cycleCode
+      payload.memberId
     );
 
     const familyUniqueCode = asNullableNumber(familyRow?.familyUniqueCode);
@@ -1333,6 +1401,13 @@ export function createEligibleDataService(db: Database): EligibleDataService {
     return { deleted: asNumber(countRow?.count) };
   }
 
+  async function getPendingDistributionCount(): Promise<number> {
+    const row = await db.get<{ count: number }>(
+      "SELECT COUNT(*) as count FROM distribution_queue WHERE status = 'pending_local'"
+    );
+    return asNumber(row?.count);
+  }
+
   return {
     saveEligibleMembers,
     searchDistributionMember,
@@ -1342,6 +1417,7 @@ export function createEligibleDataService(db: Database): EligibleDataService {
     saveClientDistributionHistory,
     getClientDistributionHistory,
     getDistributionQueue,
+    getPendingDistributionCount,
     getOperationsAggregates,
     clearDistributionQueue,
     hasEligibleData,

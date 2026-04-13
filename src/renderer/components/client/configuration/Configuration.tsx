@@ -16,6 +16,7 @@ import {
   resetDatabaseForDevelopment,
   savePrintSettings
 } from '@renderer/services/configService';
+import { UpdateSettings } from '@renderer/components/shared/configuration/UpdateSettings';
 import { showErrorToast } from '@renderer/lib/errorToast';
 
 interface ClientConfigurationProps extends ClientRouteComponentProps {
@@ -142,6 +143,13 @@ export function Configuration({
             onClick={() => navigateToConfigurationTab(route, onNavigate, 'printer')}
           >
             {intl.formatMessage({ id: 'config.tabs.printer' })}
+          </button>
+          <button
+            type="button"
+            className={route.configurationTab === 'updates' ? 'configuration-tab active' : 'configuration-tab'}
+            onClick={() => navigateToConfigurationTab(route, onNavigate, 'updates')}
+          >
+            {intl.formatMessage({ id: 'config.tabs.updates' })}
           </button>
           <button
             type="button"
@@ -300,6 +308,10 @@ export function Configuration({
                 : intl.formatMessage({ id: 'common.save' })}
             </Button>
           </div>
+        ) : null}
+
+        {route.configurationTab === 'updates' ? (
+          <UpdateSettings />
         ) : null}
 
         {route.configurationTab === 'developer' ? (

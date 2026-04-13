@@ -32,13 +32,10 @@ function resolveEligibleMembersUrl(fdpCode: string): string {
   const endpointPath =
     getEnvValue('RENDERER_VITE_ELIGIBLE_MEMBERS_PATH') ??
     getEnvValue('VITE_ELIGIBLE_MEMBERS_PATH') ??
-    '/api/v1/active-cycles-households/';
+    '/api/v1/active-cycles-householdsv5/';
 
   const normalizedPath = endpointPath.endsWith('/') ? endpointPath : `${endpointPath}/`;
-  const url = new URL(`${normalizedPath}${fdpCode}`, apiBase);
-  url.searchParams.set('include_documents', 'true');
-  url.searchParams.set('include_distribution_reports', 'true');
-  return url.toString();
+  return new URL(`${normalizedPath}${fdpCode}`, apiBase).toString();
 }
 
 export function registerEligibleDataIpc(eligibleDataService: EligibleDataService): void {
@@ -81,8 +78,7 @@ export function registerEligibleDataIpc(eligibleDataService: EligibleDataService
       _event,
       params: {
         memberId: number;
-        cycleCode: number;
-        familyHhId: string;
+        familyUniqueCode: number;
       }
     ) => {
       return eligibleDataService.getDistributionDetail(params);

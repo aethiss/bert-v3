@@ -1,0 +1,141 @@
+trigger:
+  branches:
+    include:
+      - dev
+      - main
+
+pool:
+  vmImage: 'windows-latest'
+
+variables:
+  nodeVersion: '24'
+  pythonVersion: '3.12'
+
+stages:
+  - stage: Dev
+    displayName: Build and Publish DEV
+    condition: eq(variables['Build.SourceBranchName'], 'dev')
+    jobs:
+      - job: Build_DEV
+        displayName: Build DEV release and publish updater artifacts
+        timeoutInMinutes: 120
+        steps:
+          - checkout: self
+            clean: true
+
+          - task: NodeTool@0
+            displayName: Use Node.js 24
+            inputs:
+              versionSpec: '24.x'
+
+          - task: UsePythonVersion@0
+            displayName: Use Python 3.12
+            inputs:
+              versionSpec: '3.12'
+              addToPath: true
+
+          - powershell: |
+              Write-Host "Node version:"
+              node -v
+              Write-Host "npm version:"
+              npm -v
+              Write-Host "Python version:"
+              python --version
+            displayName: Validate toolchain
+
+          - powershell: |
+              Write-Host "Installing dependencies..."
+              cd "$(Build.SourcesDirectory)"
+              npm ci
+            displayName: Install dependencies
+
+          - powershell: |
+              Write-Host "Publishing Windows artifacts to S3..."
+              cd "$(Build.SourcesDirectory)"
+              npm run dist:win:publish
+            displayName: Build and publish Windows artifacts
+            env:
+              AWS_ACCESS_KEY_ID: $(AWS_ACCESS_KEY_ID)
+              AWS_SECRET_ACCESS_KEY: $(AWS_SECRET_ACCESS_KEY)
+              AWS_REGION: $(AWS_REGION)
+              S3_BUCKET: $(S3_BUCKET)
+              BERT_S3_PATH: bert_2_pipeline/Dev
+              MAIN_VITE_CIAM_URL: $(MAIN_VITE_CIAM_URL)
+              MAIN_VITE_DEV_MODE: $(MAIN_VITE_DEV_MODE)
+              OIDC_JWT_URL: $(OIDC_JWT_URL)
+              RENDERER_VITE_API_URL: $(RENDERER_VITE_API_URL)
+              RENDERER_VITE_ELIGIBLE_MEMBERS_PATH: $(RENDERER_VITE_ELIGIBLE_MEMBERS_PATH)
+              RENDERER_VITE_DEV_MODE: $(RENDERER_VITE_DEV_MODE)
+              RENDERER_VITE_ENVIROMENT: $(RENDERER_VITE_ENVIROMENT)
+              VITE_API_URL: $(VITE_API_URL)
+
+          - task: PublishBuildArtifacts@1
+            displayName: Publish DEV release folder
+            inputs:
+              PathtoPublish: '$(Build.SourcesDirectory)\release'
+              ArtifactName: 'windows-release-dev'
+              publishLocation: 'Container'
+
+  - stage: Prod
+    displayName: Build and Publish PROD
+    condition: eq(variables['Build.SourceBranchName'], 'main')
+    jobs:
+      - job: Build_PROD
+        displayName: Build PROD release and publish updater artifacts
+        timeoutInMinutes: 120
+        steps:
+          - checkout: self
+            clean: true
+
+          - task: NodeTool@0
+            displayName: Use Node.js 24
+            inputs:
+              versionSpec: '24.x'
+
+          - task: UsePythonVersion@0
+            displayName: Use Python 3.12
+            inputs:
+              versionSpec: '3.12'
+              addToPath: true
+
+          - powershell: |
+              Write-Host "Node version:"
+              node -v
+              Write-Host "npm version:"
+              npm -v
+              Write-Host "Python version:"
+              python --version
+            displayName: Validate toolchain
+
+          - powershell: |
+              Write-Host "Installing dependencies..."
+              cd "$(Build.SourcesDirectory)"
+              npm ci
+            displayName: Install dependencies
+
+          - powershell: |
+              Write-Host "Publishing Windows artifacts to S3..."
+              cd "$(Build.SourcesDirectory)"
+              npm run dist:win:publish
+            displayName: Build and publish Windows artifacts
+            env:
+              AWS_ACCESS_KEY_ID: $(AWS_ACCESS_KEY_ID)
+              AWS_SECRET_ACCESS_KEY: $(AWS_SECRET_ACCESS_KEY)
+              AWS_REGION: $(AWS_REGION)
+              S3_BUCKET: $(S3_BUCKET)
+              BERT_S3_PATH: bert_2_pipeline/Prod
+              MAIN_VITE_CIAM_URL: $(MAIN_VITE_CIAM_URL)
+              MAIN_VITE_DEV_MODE: $(MAIN_VITE_DEV_MODE)
+              OIDC_JWT_URL: $(OIDC_JWT_URL)
+              RENDERER_VITE_API_URL: $(RENDERER_VITE_API_URL)
+              RENDERER_VITE_ELIGIBLE_MEMBERS_PATH: $(RENDERER_VITE_ELIGIBLE_MEMBERS_PATH)
+              RENDERER_VITE_DEV_MODE: $(RENDERER_VITE_DEV_MODE)
+              RENDERER_VITE_ENVIROMENT: $(RENDERER_VITE_ENVIROMENT)
+              VITE_API_URL: $(VITE_API_URL)
+
+          - task: PublishBuildArtifacts@1
+            displayName: Publish PROD release folder
+            inputs:
+              PathtoPublish: '$(Build.SourcesDirectory)\release'
+              ArtifactName: 'windows-release-prod'
+              publishLocation: 'Container'

@@ -1,6 +1,6 @@
 {
   "name": "bert-v2",
-  "version": "1.1.1",
+  "version": "1.1.2",
   "private": true,
   "description": "BERT desktop app (Electron + Vite + React + TypeScript)",
   "main": "dist/main/main.js",
@@ -9,6 +9,7 @@
   },
   "scripts": {
     "clean": "node scripts/clean.mjs",
+    "prepare:runtime-env": "node scripts/prepare-runtime-env.mjs",
     "dev": "concurrently -k \"npm:dev:renderer\" \"npm:dev:main\" \"npm:dev:preload\" \"npm:dev:electron\"",
     "dev:renderer": "vite",
     "dev:main": "tsc -p tsconfig.main.json --watch --preserveWatchOutput --incremental false",
@@ -18,10 +19,12 @@
     "build:main": "tsc -p tsconfig.main.json",
     "build:preload": "tsc -p tsconfig.preload.json",
     "build:renderer": "vite build",
-    "dist:dir": "npm run build && electron-builder --dir --publish never",
-    "dist": "npm run build && electron-builder --publish never",
-    "dist:mac": "npm run build && electron-builder --mac --publish never",
-    "dist:win": "npm run build && electron-builder --win --publish never",
+    "dist:dir": "npm run build && npm run prepare:runtime-env && electron-builder --config electron-builder.config.cjs --dir --publish never",
+    "dist": "npm run build && npm run prepare:runtime-env && electron-builder --config electron-builder.config.cjs --publish never",
+    "dist:mac": "npm run build && npm run prepare:runtime-env && electron-builder --config electron-builder.config.cjs --mac --publish never",
+    "dist:win": "npm run build && npm run prepare:runtime-env && electron-builder --config electron-builder.config.cjs --win --publish never",
+    "dist:mac:publish": "npm run build && npm run prepare:runtime-env && electron-builder --config electron-builder.config.cjs --mac --publish always",
+    "dist:win:publish": "npm run build && npm run prepare:runtime-env && electron-builder --config electron-builder.config.cjs --win --publish always",
     "typecheck": "tsc -p tsconfig.main.json --noEmit && tsc -p tsconfig.preload.json --noEmit && tsc -p tsconfig.renderer.json --noEmit",
     "test": "npm run build:main && node --test tests/main/*.test.mjs",
     "lint": "eslint .",
@@ -36,6 +39,7 @@
     "@tailwindcss/vite": "^4.2.1",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "electron-updater": "^6.8.3",
     "lucide-react": "^0.577.0",
     "next-themes": "^0.4.6",
     "radix-ui": "^1.4.3",
@@ -73,57 +77,5 @@
     "typescript-eslint": "^8.26.1",
     "vite": "^6.2.2",
     "wait-on": "^8.0.3"
-  },
-  "build": {
-    "appId": "org.wfp.bert.v3",
-    "productName": "BeRT",
-    "directories": {
-      "output": "release",
-      "buildResources": "build"
-    },
-    "files": [
-      "dist/**/*",
-      "package.json"
-    ],
-    "extraResources": [
-      {
-        "from": "src/renderer/assets/branding",
-        "to": "src/renderer/assets/branding",
-        "filter": [
-          "**/*"
-        ]
-      },
-      {
-        "from": ".env",
-        "to": "app.env"
-      }
-    ],
-    "mac": {
-      "target": [
-        "dmg",
-        "zip"
-      ],
-      "icon": "build/icons/icon.icns",
-      "artifactName": "${productName}-${version}-${arch}.${ext}"
-    },
-    "win": {
-      "target": [
-        {
-          "target": "nsis",
-          "arch": [
-            "x64"
-          ]
-        }
-      ],
-      "icon": "build/icons/icon.ico",
-      "artifactName": "${productName}-${version}-${arch}-setup.${ext}"
-    },
-    "nsis": {
-      "oneClick": false,
-      "allowToChangeInstallationDirectory": true,
-      "createDesktopShortcut": true,
-      "createStartMenuShortcut": true,
-      "deleteAppDataOnUninstall": true
-    }
   }
 }

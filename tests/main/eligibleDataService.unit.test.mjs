@@ -27,7 +27,7 @@ test('buildOverviewSummaryFromPayload maps top-level totals and first two cycles
         cycleName: 'SFA - Jan',
         cycleNote: null,
         household_count: 10,
-        households: []
+        foodCommodities: []
       },
       {
         cycleId: 'c-2',
@@ -40,7 +40,7 @@ test('buildOverviewSummaryFromPayload maps top-level totals and first two cycles
         cycleName: 'BSFP - Feb',
         cycleNote: null,
         household_count: 8,
-        households: []
+        foodCommodities: []
       },
       {
         cycleId: 'c-3',
@@ -53,9 +53,10 @@ test('buildOverviewSummaryFromPayload maps top-level totals and first two cycles
         cycleName: 'NFI - Mar',
         cycleNote: null,
         household_count: 5,
-        households: []
+        foodCommodities: []
       }
-    ]
+    ],
+    families: []
   };
 
   const summary = buildOverviewSummaryFromPayload(payload, 42);
@@ -78,8 +79,8 @@ test('pickPreferredDistributionMember selects Principle role and falls back to f
       role: 'Member',
       documentNumber: 'A',
       familyUniqueCode: 1,
-      cycleCode: 10,
-      familyHhId: 'HH-1',
+      firstName: 'A',
+      lastName: null,
       fullName: 'A'
     },
     {
@@ -87,8 +88,8 @@ test('pickPreferredDistributionMember selects Principle role and falls back to f
       role: 'Principle',
       documentNumber: 'B',
       familyUniqueCode: 1,
-      cycleCode: 10,
-      familyHhId: 'HH-1',
+      firstName: 'B',
+      lastName: null,
       fullName: 'B'
     }
   ];
@@ -102,8 +103,8 @@ test('pickPreferredDistributionMember selects Principle role and falls back to f
       role: 'Caregiver',
       documentNumber: 'X',
       familyUniqueCode: 2,
-      cycleCode: 10,
-      familyHhId: 'HH-2',
+      firstName: 'C',
+      lastName: null,
       fullName: 'C'
     },
     {
@@ -111,8 +112,8 @@ test('pickPreferredDistributionMember selects Principle role and falls back to f
       role: 'Member',
       documentNumber: 'Y',
       familyUniqueCode: 2,
-      cycleCode: 10,
-      familyHhId: 'HH-2',
+      firstName: 'D',
+      lastName: null,
       fullName: 'D'
     }
   ];

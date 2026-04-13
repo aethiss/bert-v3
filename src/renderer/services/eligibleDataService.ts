@@ -31,8 +31,7 @@ export async function searchDistributionMember(
 
 export async function getDistributionDetail(params: {
   memberId: number;
-  cycleCode: number;
-  familyHhId: string;
+  familyUniqueCode: number;
 }): Promise<DistributionDetailData | null> {
   return window.bertApp.eligibleData.getDistributionDetail(params);
 }
