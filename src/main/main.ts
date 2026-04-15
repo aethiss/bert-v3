@@ -6,10 +6,12 @@ import { registerAuthIpc } from './ipc/authIpc';
 import { registerConfigIpc } from './ipc/configIpc';
 import { registerEligibleDataIpc } from './ipc/eligibleDataIpc';
 import { registerInstallerIpc } from './ipc/installerIpc';
+import { registerLogIpc } from './ipc/logIpc';
 import { registerUpdaterIpc } from './ipc/updaterIpc';
 import { createRuntimeConfigService } from './services/configService';
 import { createEligibleDataService } from './services/eligibleDataService';
 import { loadDotEnvFromKnownLocations } from './services/envService';
+import { createAppLogService } from './services/logService';
 import { createUpdateService } from './services/updateService';
 import { createUserService } from './services/userService';
 import { createLocalApiServer } from './server/localApiServer';
@@ -65,6 +67,7 @@ async function createMainWindow(): Promise<void> {
 }
 
 async function bootstrap(): Promise<void> {
+  const logService = createAppLogService(app.getPath('userData'));
   const envLoadResult = loadDotEnvFromKnownLocations({
     preferBundledAppEnv: app.isPackaged,
     requiredKeys: ['MAIN_VITE_CIAM_URL']
@@ -83,13 +86,22 @@ async function bootstrap(): Promise<void> {
     getPendingDistributionCount: () => eligibleDataService.getPendingDistributionCount()
   });
   const localApiServer = createLocalApiServer({ eligibleDataService });
+  registerLogIpc(logService);
+  registerConfigIpc(configService, localApiServer, eligibleDataService, logService);
   registerInstallerIpc(configService);
-  registerConfigIpc(configService, localApiServer, eligibleDataService);
-  registerAuthIpc(() => mainWindow, userService);
-  registerEligibleDataIpc(eligibleDataService);
+  registerAuthIpc(() => mainWindow, userService, logService);
+  registerEligibleDataIpc(eligibleDataService, logService);
   registerUpdaterIpc(updateService);
   await createMainWindow();
   updateService.start();
+
+  process.on('uncaughtException', (error) => {
+    void logService.logError('main:uncaughtException', error);
+  });
+
+  process.on('unhandledRejection', (reason) => {
+    void logService.logError('main:unhandledRejection', reason);
+  });
 
   app.on('before-quit', () => {
     updateService.dispose();
@@ -112,6 +124,8 @@ app.whenReady().then(() => {
 
   void bootstrap().catch((error: unknown) => {
     console.error('Application bootstrap failed', error);
+    const startupLogService = createAppLogService(app.getPath('userData'));
+    void startupLogService.logError('main:bootstrap', error);
     app.quit();
   });
 

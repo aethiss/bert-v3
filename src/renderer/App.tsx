@@ -41,7 +41,14 @@ import {
 } from '@renderer/store/selectors/eligibleSelectors';
 import { showErrorToast } from '@renderer/lib/errorToast';
 import { isRtkLikeError, toErrorMessage } from '@renderer/lib/errorMessage';
-import { getLanguage, getLocalServerStatus, saveLanguage } from '@renderer/services/configService';
+import {
+  getAppVersion,
+  getLanguage,
+  getLocalServerStatus,
+  logAppError,
+  logUserAction,
+  saveLanguage
+} from '@renderer/services/configService';
 import { AppUpdateNotifications } from '@renderer/components/shared/AppUpdateNotifications';
 import { LocaleContext } from '@renderer/i18n/localeContext';
 import { MESSAGES_BY_LOCALE } from '@renderer/i18n/messages';
@@ -61,6 +68,7 @@ export function App() {
   const [isHydratingLocale, setIsHydratingLocale] = useState(true);
   const [isSynchronizing, setIsSynchronizing] = useState(false);
   const [isLocalServerRunning, setIsLocalServerRunning] = useState(false);
+  const [appVersion, setAppVersion] = useState<string>(window.bertApp.version ?? 'unknown');
 
   const refreshEligibleSummary = useCallback(async () => {
     const summary = await getEligibleOverviewSummary();
@@ -128,11 +136,30 @@ export function App() {
   }, [locale]);
 
   useEffect(() => {
+    let mounted = true;
+    void getAppVersion()
+      .then((version) => {
+        if (mounted) {
+          setAppVersion(version);
+        }
+      })
+      .catch(() => undefined);
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
     const onWindowError = (event: ErrorEvent) => {
+      const errorMessage =
+        event.error instanceof Error ? `${event.error.name}: ${event.error.message}` : event.message;
+      void logAppError('renderer:windowError', errorMessage, event.filename ?? 'unknown');
       showErrorToast(event.error ?? event.message);
     };
 
     const onUnhandledRejection = (event: PromiseRejectionEvent) => {
+      void logAppError('renderer:unhandledRejection', toErrorMessage(event.reason));
       showErrorToast(event.reason);
     };
 
@@ -142,6 +169,37 @@ export function App() {
     return () => {
       window.removeEventListener('error', onWindowError);
       window.removeEventListener('unhandledrejection', onUnhandledRejection);
+    };
+  }, []);
+
+  useEffect(() => {
+    const onGlobalClick = (event: MouseEvent) => {
+      const target = event.target;
+      if (!(target instanceof HTMLElement)) {
+        return;
+      }
+
+      const actionElement = target.closest<HTMLElement>('button,[role="button"]');
+      if (!actionElement) {
+        return;
+      }
+
+      const label =
+        actionElement.getAttribute('data-log-action') ??
+        actionElement.getAttribute('aria-label') ??
+        actionElement.textContent?.trim() ??
+        'button';
+      if (!label) {
+        return;
+      }
+
+      const sanitizedLabel = label.replace(/\s+/g, ' ').slice(0, 140);
+      void logUserAction(`user click ${sanitizedLabel}`);
+    };
+
+    document.addEventListener('click', onGlobalClick, true);
+    return () => {
+      document.removeEventListener('click', onGlobalClick, true);
     };
   }, []);
 
@@ -358,21 +416,27 @@ export function App() {
         return <DashboardPage />;
       }
 
-      return <ClientPage route={route.client} onNavigate={(nextRoute) => {
-        const next = {
-          appRoute: 'client' as const,
-          server: route.server,
-          client: nextRoute
-        };
+      return (
+        <ClientPage
+          route={route.client}
+          appVersion={appVersion}
+          onNavigate={(nextRoute) => {
+            const next = {
+              appRoute: 'client' as const,
+              server: route.server,
+              client: nextRoute
+            };
 
-        const nextHash = toAppHash(next);
-        if (window.location.hash !== nextHash) {
-          window.location.hash = nextHash;
-          return;
-        }
+            const nextHash = toAppHash(next);
+            if (window.location.hash !== nextHash) {
+              window.location.hash = nextHash;
+              return;
+            }
 
-        setRoute(next);
-      }} />;
+            setRoute(next);
+          }}
+        />
+      );
     }
 
     if (!isAuthenticated) {
@@ -406,6 +470,7 @@ export function App() {
         userEmail={currentUser?.email ?? ''}
         isOnline={isOnline}
         isLocalServerRunning={isLocalServerRunning}
+        appVersion={appVersion}
         authActionLabel={isOnline ? 'Logout' : 'Login'}
         onAuthAction={() => {
           void handleServerAuthAction();
@@ -414,6 +479,7 @@ export function App() {
     );
   }, [
     currentUser?.email,
+    appVersion,
     eligibleOverviewSummary,
     handleServerAuthAction,
     hasEligibleData,

@@ -12,6 +12,7 @@ export interface ClientTopNavItem {
 interface ClientTopNavigationProps {
   items: ClientTopNavItem[];
   activeSection: ClientSection;
+  appVersion: string;
   isConnected: boolean;
   connectedHost: string;
   alias: string;
@@ -22,6 +23,7 @@ interface ClientTopNavigationProps {
 export function TopNavigation({
   items,
   activeSection,
+  appVersion,
   isConnected,
   connectedHost,
   alias,
@@ -39,7 +41,7 @@ export function TopNavigation({
           alt={intl.formatMessage({ id: 'brand.wfp' })}
         />
         <span className="server-brand-name">BeRT-Client</span>
-        <span className="server-brand-version">v2</span>
+        <span className="server-brand-version">v{appVersion}</span>
       </div>
 
       <nav className="server-main-nav" aria-label={intl.formatMessage({ id: 'nav.aria.client' })}>

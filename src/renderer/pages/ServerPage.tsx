@@ -21,6 +21,7 @@ interface ServerPageProps {
   userEmail: string;
   isOnline: boolean;
   isLocalServerRunning: boolean;
+  appVersion: string;
   authActionLabel: 'Login' | 'Logout';
   onAuthAction: () => void;
 }
@@ -37,6 +38,7 @@ export function ServerPage({
   userEmail,
   isOnline,
   isLocalServerRunning,
+  appVersion,
   authActionLabel,
   onAuthAction
 }: ServerPageProps) {
@@ -92,6 +94,7 @@ export function ServerPage({
           userEmail={userEmail}
           isOnline={isOnline}
           isLocalServerRunning={isLocalServerRunning}
+          appVersion={appVersion}
           authActionLabel={authActionLabel}
           onAuthAction={onAuthAction}
           onSelect={(section) => {

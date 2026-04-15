@@ -8,6 +8,7 @@ import type {
   LocalDistributionEventInput
 } from '../../shared/types/eligible';
 import { getEnvValue } from '../services/envService';
+import type { AppLogService } from '../services/logService';
 import type { EligibleDataService } from '../services/eligibleDataService';
 
 const CHANNEL_SAVE_ELIGIBLE_DATA = 'eligibleData:save';
@@ -38,7 +39,10 @@ function resolveEligibleMembersUrl(fdpCode: string): string {
   return new URL(`${normalizedPath}${fdpCode}`, apiBase).toString();
 }
 
-export function registerEligibleDataIpc(eligibleDataService: EligibleDataService): void {
+export function registerEligibleDataIpc(
+  eligibleDataService: EligibleDataService,
+  logService: AppLogService
+): void {
   ipcMain.removeHandler(CHANNEL_SAVE_ELIGIBLE_DATA);
   ipcMain.removeHandler(CHANNEL_HAS_ELIGIBLE_DATA);
   ipcMain.removeHandler(CHANNEL_GET_OVERVIEW_SUMMARY);
@@ -114,30 +118,57 @@ export function registerEligibleDataIpc(eligibleDataService: EligibleDataService
   ipcMain.handle(
     CHANNEL_SYNC_ELIGIBLE_DATA,
     async (_event, params: { fdpCode: string; jwt: string }) => {
-      if (!params?.fdpCode?.trim()) {
-        throw new Error('Missing FDP code for eligible members sync.');
-      }
-      if (!params?.jwt?.trim()) {
-        throw new Error('Missing JWT token for eligible members sync.');
-      }
-
-      const url = resolveEligibleMembersUrl(params.fdpCode.trim());
-      const response = await fetch(url, {
-        method: 'GET',
-        headers: {
-          authorization: `Bearer ${params.jwt.trim()}`
+      try {
+        if (!params?.fdpCode?.trim()) {
+          throw new Error('Missing FDP code for eligible members sync.');
         }
-      });
+        if (!params?.jwt?.trim()) {
+          throw new Error('Missing JWT token for eligible members sync.');
+        }
 
-      const rawBody = await response.text();
-      if (!response.ok) {
-        throw new Error(
-          `Eligible members request failed for ${url} (${response.status} ${response.statusText}): ${rawBody.slice(0, 180)}`
-        );
+        const url = resolveEligibleMembersUrl(params.fdpCode.trim());
+        const startedAt = Date.now();
+        const response = await fetch(url, {
+          method: 'GET',
+          headers: {
+            authorization: `Bearer ${params.jwt.trim()}`
+          }
+        });
+
+        const rawBody = await response.text();
+        const durationMs = Date.now() - startedAt;
+        if (!response.ok) {
+          await logService.logNetwork({
+            scope: 'eligibleData:sync',
+            method: 'GET',
+            url,
+            ok: false,
+            status: response.status,
+            statusText: response.statusText,
+            durationMs,
+            responseBodyPreview: rawBody.slice(0, 500),
+            errorMessage: 'Eligible members request failed'
+          });
+          throw new Error(
+            `Eligible members request failed for ${url} (${response.status} ${response.statusText}): ${rawBody.slice(0, 180)}`
+          );
+        }
+
+        await logService.logNetwork({
+          scope: 'eligibleData:sync',
+          method: 'GET',
+          url,
+          ok: true,
+          status: response.status,
+          durationMs
+        });
+
+        const payload = JSON.parse(rawBody) as EligibleMembersApiResponse;
+        return eligibleDataService.saveEligibleMembers(payload);
+      } catch (error) {
+        await logService.logError('eligibleData:sync', error);
+        throw error;
       }
-
-      const payload = JSON.parse(rawBody) as EligibleMembersApiResponse;
-      return eligibleDataService.saveEligibleMembers(payload);
     }
   );
 }

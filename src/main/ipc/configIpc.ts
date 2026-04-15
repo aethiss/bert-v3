@@ -1,4 +1,4 @@
-import { ipcMain } from 'electron';
+import { app, ipcMain } from 'electron';
 import { networkInterfaces } from 'node:os';
 import type {
   ClientConnectionSettings,
@@ -11,6 +11,7 @@ import type { SupportedLocale } from '../../shared/types/language';
 import type { RuntimeConfigService } from '../services/configService';
 import type { LocalApiServer } from '../server/localApiServer';
 import type { EligibleDataService } from '../services/eligibleDataService';
+import type { AppLogService } from '../services/logService';
 
 const CHANNEL_GET_PRINT_SETTINGS = 'config:getPrintSettings';
 const CHANNEL_SET_PRINT_SETTINGS = 'config:setPrintSettings';
@@ -26,6 +27,7 @@ const CHANNEL_GET_OPERATIONS_DASHBOARD = 'config:getOperationsDashboard';
 const CHANNEL_GET_CLIENT_CONNECTION_SETTINGS = 'config:getClientConnectionSettings';
 const CHANNEL_SET_CLIENT_CONNECTION_SETTINGS = 'config:setClientConnectionSettings';
 const CHANNEL_RESET_DATABASE_FOR_DEVELOPMENT = 'config:resetDatabaseForDevelopment';
+const CHANNEL_GET_APP_VERSION = 'config:getAppVersion';
 
 function listLocalInterfaces(): LocalServerInterfaceInfo[] {
   const all = networkInterfaces();
@@ -62,7 +64,8 @@ function listLocalInterfaces(): LocalServerInterfaceInfo[] {
 export function registerConfigIpc(
   configService: RuntimeConfigService,
   localApiServer: LocalApiServer,
-  eligibleDataService: EligibleDataService
+  eligibleDataService: EligibleDataService,
+  logService: AppLogService
 ): void {
   ipcMain.removeHandler(CHANNEL_GET_PRINT_SETTINGS);
   ipcMain.removeHandler(CHANNEL_SET_PRINT_SETTINGS);
@@ -78,6 +81,7 @@ export function registerConfigIpc(
   ipcMain.removeHandler(CHANNEL_GET_CLIENT_CONNECTION_SETTINGS);
   ipcMain.removeHandler(CHANNEL_SET_CLIENT_CONNECTION_SETTINGS);
   ipcMain.removeHandler(CHANNEL_RESET_DATABASE_FOR_DEVELOPMENT);
+  ipcMain.removeHandler(CHANNEL_GET_APP_VERSION);
 
   ipcMain.handle(CHANNEL_GET_PRINT_SETTINGS, async () => {
     return configService.getPrintSettings();
@@ -143,6 +147,10 @@ export function registerConfigIpc(
   ipcMain.handle(CHANNEL_RESET_DATABASE_FOR_DEVELOPMENT, async () => {
     await localApiServer.stop();
     await configService.resetDatabaseForDevelopment();
+  });
+
+  ipcMain.handle(CHANNEL_GET_APP_VERSION, async () => {
+    return app.getVersion();
   });
 
   ipcMain.handle(
@@ -225,4 +233,6 @@ export function registerConfigIpc(
       };
     }
   );
+
+  void logService.logInfo('config:ipc', 'Configuration IPC handlers registered');
 }

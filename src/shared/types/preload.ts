@@ -23,6 +23,7 @@ import type { OperationsDashboard, OperationsDashboardQuery } from './operations
 import type { PrintSettings } from './printConfig';
 import type { PersistedUserProfile, UserInfoApiModel } from './user';
 import type { SupportedLocale } from './language';
+import type { AppLogFileInfo, ExportLogsResult, RendererNetworkLogPayload } from './log';
 
 export interface BertAppApi {
   version: string;
@@ -46,6 +47,7 @@ export interface BertAppApi {
     onStateChanged(listener: (state: UpdaterState) => void): () => void;
   };
   config: {
+    getAppVersion(): Promise<string>;
     getPrintSettings(): Promise<PrintSettings>;
     setPrintSettings(settings: PrintSettings): Promise<PrintSettings>;
     getLanguage(): Promise<SupportedLocale>;
@@ -62,6 +64,14 @@ export interface BertAppApi {
       settings: ClientConnectionSettings
     ): Promise<ClientConnectionSettings>;
     resetDatabaseForDevelopment(): Promise<void>;
+  };
+  logs: {
+    logAction(action: string): Promise<void>;
+    logError(scope: string, message: string, details?: string): Promise<void>;
+    logNetwork(payload: RendererNetworkLogPayload): Promise<void>;
+    listRecentFiles(): Promise<AppLogFileInfo[]>;
+    openFile(fileName: string): Promise<void>;
+    exportRecentFiles(): Promise<ExportLogsResult>;
   };
   eligibleData: {
     save(payload: EligibleMembersApiResponse): Promise<EligibleOverviewSummary>;

@@ -18,6 +18,7 @@ import { showErrorToast } from '@renderer/lib/errorToast';
 
 interface ClientPageProps {
   route: ClientRouteState;
+  appVersion: string;
   onNavigate: (nextRoute: ClientRouteState) => void;
 }
 
@@ -28,7 +29,7 @@ const DEFAULT_CONNECTION_SETTINGS: ClientConnectionSettings = {
   alias: ''
 };
 
-export function ClientPage({ route, onNavigate }: ClientPageProps) {
+export function ClientPage({ route, appVersion, onNavigate }: ClientPageProps) {
   const intl = useIntl();
   const [settings, setSettings] = useState<ClientConnectionSettings>(DEFAULT_CONNECTION_SETTINGS);
   const [session, setSession] = useState<ClientSession | null>(null);
@@ -180,6 +181,7 @@ export function ClientPage({ route, onNavigate }: ClientPageProps) {
         <TopNavigation
           items={resolveClientNavItems()}
           activeSection={route.section}
+          appVersion={appVersion}
           isConnected={Boolean(session)}
           connectedHost={session?.host ?? 'HOST'}
           alias={session?.alias ?? ''}

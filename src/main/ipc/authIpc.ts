@@ -2,6 +2,7 @@ import { BrowserWindow, ipcMain } from 'electron';
 import type { CiamLoginResult, ExchangeCodeResult } from '../../shared/types/ipc/auth';
 import type { PersistedUserProfile, UserInfoApiModel } from '../../shared/types/user';
 import { getEnvValue } from '../services/envService';
+import type { AppLogService } from '../services/logService';
 import type { UserService } from '../services/userService';
 
 const CHANNEL_OPEN_CIAM_LOGIN = 'auth:openCiamLogin';
@@ -185,7 +186,8 @@ async function openCiamLoginWindow(
 
 export function registerAuthIpc(
   getMainWindow: () => BrowserWindow | null,
-  userService: UserService
+  userService: UserService,
+  logService: AppLogService
 ): void {
   ipcMain.removeHandler(CHANNEL_OPEN_CIAM_LOGIN);
   ipcMain.removeHandler(CHANNEL_EXCHANGE_CODE);
@@ -202,11 +204,17 @@ export function registerAuthIpc(
 
     const ciamUrl = getEnvValue('MAIN_VITE_CIAM_URL');
     if (!ciamUrl) {
+      await logService.logError('auth:openCiamLogin', 'Missing MAIN_VITE_CIAM_URL environment variable.');
       throw new Error('Missing MAIN_VITE_CIAM_URL environment variable.');
     }
 
-    console.info('[auth] Opening CIAM login window', { ciamUrl });
-    return openCiamLoginWindow(mainWindow, ciamUrl);
+    await logService.logInfo('auth:openCiamLogin', 'Opening CIAM login window', { ciamUrl });
+    try {
+      return await openCiamLoginWindow(mainWindow, ciamUrl);
+    } catch (error) {
+      await logService.logError('auth:openCiamLogin', error);
+      throw error;
+    }
   });
 
   ipcMain.handle(CHANNEL_EXCHANGE_CODE, async (_event, exchangeKey: string) => {
@@ -214,35 +222,57 @@ export function registerAuthIpc(
       throw new Error('Missing exchange key.');
     }
 
-    const exchangeUrl = resolveExchangeCodeUrl(exchangeKey);
-    console.info('[auth] Exchanging code for JWT', {
-      exchangeKey: maskToken(exchangeKey),
-      exchangeUrl
-    });
-
-    const response = await fetch(exchangeUrl, { method: 'GET' });
-    const rawBody = await response.text();
-
-    if (!response.ok) {
-      console.error('[auth] Exchange code failed', {
-        status: response.status,
-        statusText: response.statusText,
-        bodyPreview: rawBody.slice(0, 200)
+    try {
+      const exchangeUrl = resolveExchangeCodeUrl(exchangeKey);
+      await logService.logInfo('auth:exchangeCode', 'Exchanging code for JWT', {
+        exchangeKey: maskToken(exchangeKey),
+        exchangeUrl
       });
-      throw new Error(`Exchange code failed (${response.status} ${response.statusText}).`);
-    }
 
-    const tokenResponse = normalizeExchangeResponse(rawBody);
-    if (!tokenResponse.idToken) {
-      console.error('[auth] Exchange code returned empty id_token');
-      throw new Error('Exchange code returned an empty id_token.');
-    }
+      const startedAt = Date.now();
+      const response = await fetch(exchangeUrl, { method: 'GET' });
+      const rawBody = await response.text();
+      const durationMs = Date.now() - startedAt;
 
-    console.info('[auth] JWT received', {
-      jwt: maskToken(tokenResponse.idToken),
-      hasRefreshToken: Boolean(tokenResponse.refreshToken)
-    });
-    return tokenResponse;
+      if (!response.ok) {
+        await logService.logNetwork({
+          scope: 'auth:exchangeCode',
+          method: 'GET',
+          url: exchangeUrl,
+          ok: false,
+          status: response.status,
+          statusText: response.statusText,
+          durationMs,
+          responseBodyPreview: rawBody.slice(0, 300),
+          errorMessage: 'Exchange code failed'
+        });
+        throw new Error(`Exchange code failed (${response.status} ${response.statusText}).`);
+      }
+
+      await logService.logNetwork({
+        scope: 'auth:exchangeCode',
+        method: 'GET',
+        url: exchangeUrl,
+        ok: true,
+        status: response.status,
+        durationMs
+      });
+
+      const tokenResponse = normalizeExchangeResponse(rawBody);
+      if (!tokenResponse.idToken) {
+        await logService.logError('auth:exchangeCode', 'Exchange code returned empty id_token');
+        throw new Error('Exchange code returned an empty id_token.');
+      }
+
+      await logService.logInfo('auth:exchangeCode', 'JWT received', {
+        jwt: maskToken(tokenResponse.idToken),
+        hasRefreshToken: Boolean(tokenResponse.refreshToken)
+      });
+      return tokenResponse;
+    } catch (error) {
+      await logService.logError('auth:exchangeCode', error);
+      throw error;
+    }
   });
 
   ipcMain.handle(CHANNEL_GET_USER_INFO, async (_event, jwt: string) => {
@@ -250,28 +280,50 @@ export function registerAuthIpc(
       throw new Error('Missing JWT token for user info request.');
     }
 
-    const userInfoUrl = resolveUserInfoUrl();
-    console.info('[auth] Fetching user info', { userInfoUrl });
+    try {
+      const userInfoUrl = resolveUserInfoUrl();
+      await logService.logInfo('auth:getUserInfo', 'Fetching user info', { userInfoUrl });
 
-    const response = await fetch(userInfoUrl, {
-      method: 'GET',
-      headers: {
-        authorization: `Bearer ${jwt}`
-      }
-    });
-
-    const rawBody = await response.text();
-    if (!response.ok) {
-      console.error('[auth] User info request failed', {
-        status: response.status,
-        statusText: response.statusText,
-        bodyPreview: rawBody.slice(0, 200)
+      const startedAt = Date.now();
+      const response = await fetch(userInfoUrl, {
+        method: 'GET',
+        headers: {
+          authorization: `Bearer ${jwt}`
+        }
       });
-      throw new Error(`User info request failed (${response.status} ${response.statusText}).`);
-    }
 
-    const parsedBody = JSON.parse(rawBody) as UserInfoApiModel[];
-    return parsedBody;
+      const rawBody = await response.text();
+      const durationMs = Date.now() - startedAt;
+      if (!response.ok) {
+        await logService.logNetwork({
+          scope: 'auth:getUserInfo',
+          method: 'GET',
+          url: userInfoUrl,
+          ok: false,
+          status: response.status,
+          statusText: response.statusText,
+          durationMs,
+          responseBodyPreview: rawBody.slice(0, 300),
+          errorMessage: 'User info request failed'
+        });
+        throw new Error(`User info request failed (${response.status} ${response.statusText}).`);
+      }
+
+      await logService.logNetwork({
+        scope: 'auth:getUserInfo',
+        method: 'GET',
+        url: userInfoUrl,
+        ok: true,
+        status: response.status,
+        durationMs
+      });
+
+      const parsedBody = JSON.parse(rawBody) as UserInfoApiModel[];
+      return parsedBody;
+    } catch (error) {
+      await logService.logError('auth:getUserInfo', error);
+      throw error;
+    }
   });
 
   ipcMain.handle(CHANNEL_GET_PERSISTED_USER, async () => {

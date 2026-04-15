@@ -8,9 +8,12 @@ import { Select } from '@ui/components/ui/select';
 import { showErrorToast } from '@renderer/lib/errorToast';
 import { getInstallerModeState } from '@renderer/services/installerService';
 import {
+  exportRecentLogFiles,
+  getRecentLogFiles,
   getLocalServerSettings,
   getLocalServerStatus,
   getPrintSettings,
+  openLogFile,
   resetDatabaseForDevelopment,
   getServerInterfaces,
   saveLocalServerSettings,
@@ -26,6 +29,7 @@ import type {
 import { LanguageSettings } from '@renderer/components/server/configuration/LanguageSettings';
 import { UpdateSettings } from '@renderer/components/shared/configuration/UpdateSettings';
 import type { AppMode } from '@shared/types/appMode';
+import type { AppLogFileInfo } from '@shared/types/log';
 import type { LocalServerInterfaceInfo, LocalServerSettings } from '@shared/types/localServer';
 import type { PrintFormat } from '@shared/types/printConfig';
 
@@ -67,6 +71,9 @@ export function Configuration({ route, onNavigate }: ServerRouteComponentProps) 
   const [appMode, setAppMode] = useState<AppMode | null>(null);
   const [isResetConfirmOpen, setIsResetConfirmOpen] = useState(false);
   const [isResetting, setIsResetting] = useState(false);
+  const [logFiles, setLogFiles] = useState<AppLogFileInfo[]>([]);
+  const [isLoadingLogs, setIsLoadingLogs] = useState(false);
+  const [isExportingLogs, setIsExportingLogs] = useState(false);
 
   useEffect(() => {
     if (route.configurationTab !== 'printer') {
@@ -94,6 +101,35 @@ export function Configuration({ route, onNavigate }: ServerRouteComponentProps) 
 
     return () => {
       isMounted = false;
+    };
+  }, [route.configurationTab]);
+
+  useEffect(() => {
+    if (route.configurationTab !== 'log') {
+      return;
+    }
+
+    let mounted = true;
+    setIsLoadingLogs(true);
+    void getRecentLogFiles()
+      .then((files) => {
+        if (mounted) {
+          setLogFiles(files);
+        }
+      })
+      .catch((error) => {
+        if (mounted) {
+          showErrorToast(error);
+        }
+      })
+      .finally(() => {
+        if (mounted) {
+          setIsLoadingLogs(false);
+        }
+      });
+
+    return () => {
+      mounted = false;
     };
   }, [route.configurationTab]);
 
@@ -249,6 +285,46 @@ export function Configuration({ route, onNavigate }: ServerRouteComponentProps) 
       showErrorToast(error);
     } finally {
       setIsResetting(false);
+    }
+  };
+
+  const handleRefreshLogs = async (): Promise<void> => {
+    setIsLoadingLogs(true);
+    try {
+      const files = await getRecentLogFiles();
+      setLogFiles(files);
+    } catch (error) {
+      showErrorToast(error);
+    } finally {
+      setIsLoadingLogs(false);
+    }
+  };
+
+  const handleOpenLogFile = async (fileName: string): Promise<void> => {
+    try {
+      await openLogFile(fileName);
+    } catch (error) {
+      showErrorToast(error);
+    }
+  };
+
+  const handleExportLogs = async (): Promise<void> => {
+    setIsExportingLogs(true);
+    try {
+      const result = await exportRecentLogFiles();
+      toast.success(intl.formatMessage({ id: 'config.log.exportSuccessTitle' }), {
+        description: intl.formatMessage(
+          { id: 'config.log.exportSuccessDescription' },
+          { count: result.exportedCount, directory: result.directory }
+        )
+      });
+    } catch (error) {
+      if (error instanceof Error && error.message === 'Export cancelled.') {
+        return;
+      }
+      showErrorToast(error);
+    } finally {
+      setIsExportingLogs(false);
     }
   };
 
@@ -483,7 +559,60 @@ export function Configuration({ route, onNavigate }: ServerRouteComponentProps) 
         ) : null}
 
         {route.configurationTab === 'log' ? (
-          <div className="server-placeholder" />
+          <div className="configuration-form">
+            <p className="server-form-label">{intl.formatMessage({ id: 'config.log.title' })}</p>
+            <p className="server-form-muted">{intl.formatMessage({ id: 'config.log.description' })}</p>
+            <div className="configuration-server-actions">
+              <Button
+                className="server-btn server-start-btn"
+                onClick={() => void handleRefreshLogs()}
+                disabled={isLoadingLogs || isExportingLogs}
+              >
+                {isLoadingLogs
+                  ? intl.formatMessage({ id: 'common.loading' })
+                  : intl.formatMessage({ id: 'config.log.refresh' })}
+              </Button>
+              <Button
+                className="server-btn server-start-btn"
+                onClick={() => void handleExportLogs()}
+                disabled={isLoadingLogs || isExportingLogs || logFiles.length === 0}
+              >
+                {isExportingLogs
+                  ? intl.formatMessage({ id: 'config.log.exporting' })
+                  : intl.formatMessage({ id: 'config.log.export' })}
+              </Button>
+            </div>
+            {logFiles.length === 0 ? (
+              <p className="server-form-muted">{intl.formatMessage({ id: 'config.log.empty' })}</p>
+            ) : (
+              <ul className="config-log-list">
+                {logFiles.map((file) => (
+                  <li key={file.fileName} className="config-log-item">
+                    <div>
+                      <p className="config-log-file-name">{file.fileName}</p>
+                      <p className="server-form-muted">
+                        {intl.formatMessage(
+                          { id: 'config.log.fileMeta' },
+                          {
+                            sizeKb: (file.size / 1024).toFixed(1),
+                            updatedAt: new Date(file.updatedAt).toLocaleString()
+                          }
+                        )}
+                      </p>
+                    </div>
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        void handleOpenLogFile(file.fileName);
+                      }}
+                    >
+                      {intl.formatMessage({ id: 'config.log.open' })}
+                    </Button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
         ) : null}
 
         {route.configurationTab === 'language' ? (

@@ -18,6 +18,7 @@ interface TopNavigationProps {
   userEmail: string;
   isOnline: boolean;
   isLocalServerRunning: boolean;
+  appVersion: string;
   authActionLabel: 'Login' | 'Logout';
   onAuthAction: () => void;
 }
@@ -31,6 +32,7 @@ export function TopNavigation({
   userEmail,
   isOnline,
   isLocalServerRunning,
+  appVersion,
   authActionLabel,
   onAuthAction
 }: TopNavigationProps) {
@@ -45,7 +47,7 @@ export function TopNavigation({
           alt={intl.formatMessage({ id: 'brand.wfp' })}
         />
         <span className="server-brand-name">BeRT</span>
-        <span className="server-brand-version">v.2.0</span>
+        <span className="server-brand-version">v{appVersion}</span>
       </div>
 
       <nav className="server-main-nav" aria-label={intl.formatMessage({ id: 'nav.aria.main' })}>

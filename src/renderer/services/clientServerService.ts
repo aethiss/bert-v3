@@ -4,6 +4,7 @@ import type {
   DistributionSearchResult
 } from '@shared/types/eligible';
 import type { ClientConnectionSettings } from '@shared/types/localServer';
+import { logNetwork } from './configService';
 
 export interface ClientSession {
   accessToken: string;
@@ -50,6 +51,60 @@ async function parseResponse<T>(response: Response): Promise<JsonResponse<T>> {
   };
 }
 
+async function fetchWithNetworkLogging(
+  scope: string,
+  url: string,
+  init: RequestInit
+): Promise<Response> {
+  const startedAt = Date.now();
+  const method = (init.method ?? 'GET').toUpperCase();
+  const requestBodyPreview =
+    typeof init.body === 'string' ? init.body.slice(0, 300) : undefined;
+
+  try {
+    const response = await fetch(url, init);
+    const durationMs = Date.now() - startedAt;
+
+    if (response.ok) {
+      void logNetwork({
+        scope,
+        method,
+        url,
+        ok: true,
+        status: response.status,
+        durationMs
+      });
+      return response;
+    }
+
+    const responseBodyPreview = await response.clone().text().then((value) => value.slice(0, 500));
+    void logNetwork({
+      scope,
+      method,
+      url,
+      ok: false,
+      status: response.status,
+      statusText: response.statusText,
+      durationMs,
+      requestBodyPreview,
+      responseBodyPreview,
+      errorMessage: 'Local server request failed'
+    });
+    return response;
+  } catch (error) {
+    void logNetwork({
+      scope,
+      method,
+      url,
+      ok: false,
+      durationMs: Date.now() - startedAt,
+      requestBodyPreview,
+      errorMessage: error instanceof Error ? error.message : String(error)
+    });
+    throw error;
+  }
+}
+
 function withAuthHeader(session: ClientSession): HeadersInit {
   return {
     authorization: `Bearer ${session.accessToken}`,
@@ -69,7 +124,8 @@ export async function loginToLocalServer(settings: ClientConnectionSettings): Pr
     throw new Error('Missing one-time password.');
   }
 
-  const response = await fetch(`${baseUrl}/auth/login`, {
+  const url = `${baseUrl}/auth/login`;
+  const response = await fetchWithNetworkLogging('client:login', url, {
     method: 'POST',
     headers: {
       'content-type': 'application/json'
@@ -90,7 +146,8 @@ export async function loginToLocalServer(settings: ClientConnectionSettings): Pr
 }
 
 export async function pingLocalServer(session: ClientSession): Promise<void> {
-  const response = await fetch(`http://${session.host}/ping`, {
+  const url = `http://${session.host}/ping`;
+  const response = await fetchWithNetworkLogging('client:ping', url, {
     method: 'GET',
     headers: {
       authorization: `Bearer ${session.accessToken}`
@@ -112,7 +169,7 @@ export async function searchMemberOnLocalServer(
   const url = new URL(`http://${session.host}/search`);
   url.searchParams.set('id', normalized);
 
-  const response = await fetch(url.toString(), {
+  const response = await fetchWithNetworkLogging('client:searchMember', url.toString(), {
     method: 'GET',
     headers: {
       authorization: `Bearer ${session.accessToken}`
@@ -131,7 +188,7 @@ export async function getDistributionDetailFromLocalServer(
   url.searchParams.set('memberId', String(params.memberId));
   url.searchParams.set('familyUniqueCode', String(params.familyUniqueCode));
 
-  const response = await fetch(url.toString(), {
+  const response = await fetchWithNetworkLogging('client:getDistributionDetail', url.toString(), {
     method: 'GET',
     headers: {
       authorization: `Bearer ${session.accessToken}`
@@ -146,7 +203,8 @@ export async function saveDistributionOnLocalServer(
   session: ClientSession,
   payload: ClientDistributionInput
 ): Promise<{ distributionId: number }> {
-  const response = await fetch(`http://${session.host}/distribution`, {
+  const url = `http://${session.host}/distribution`;
+  const response = await fetchWithNetworkLogging('client:saveDistribution', url, {
     method: 'POST',
     headers: withAuthHeader(session),
     body: JSON.stringify(payload)

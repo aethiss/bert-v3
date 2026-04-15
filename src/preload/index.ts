@@ -15,7 +15,7 @@ import type { BertAppApi } from '../shared/types/preload';
 const UPDATER_STATE_CHANGED_CHANNEL = 'updater:stateChanged';
 
 const bertAppApi: BertAppApi = {
-  version: '0.4.0',
+  version: process.env.npm_package_version ?? 'unknown',
   auth: {
     openCiamLogin() {
       return ipcRenderer.invoke('auth:openCiamLogin');
@@ -69,6 +69,9 @@ const bertAppApi: BertAppApi = {
     }
   },
   config: {
+    getAppVersion() {
+      return ipcRenderer.invoke('config:getAppVersion') as Promise<string>;
+    },
     getPrintSettings() {
       return ipcRenderer.invoke('config:getPrintSettings') as Promise<PrintSettings>;
     },
@@ -116,6 +119,26 @@ const bertAppApi: BertAppApi = {
     },
     resetDatabaseForDevelopment() {
       return ipcRenderer.invoke('config:resetDatabaseForDevelopment') as Promise<void>;
+    }
+  },
+  logs: {
+    logAction(action: string) {
+      return ipcRenderer.invoke('logs:logAction', action) as Promise<void>;
+    },
+    logError(scope: string, message: string, details?: string) {
+      return ipcRenderer.invoke('logs:logError', scope, message, details) as Promise<void>;
+    },
+    logNetwork(payload) {
+      return ipcRenderer.invoke('logs:logNetwork', payload) as Promise<void>;
+    },
+    listRecentFiles() {
+      return ipcRenderer.invoke('logs:listRecentFiles');
+    },
+    openFile(fileName: string) {
+      return ipcRenderer.invoke('logs:openFile', fileName) as Promise<void>;
+    },
+    exportRecentFiles() {
+      return ipcRenderer.invoke('logs:exportRecentFiles');
     }
   },
   eligibleData: {

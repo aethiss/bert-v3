@@ -4,9 +4,14 @@ import type {
   LocalServerSettings,
   LocalServerStatus
 } from '@shared/types/localServer';
+import type { AppLogFileInfo, ExportLogsResult, RendererNetworkLogPayload } from '@shared/types/log';
 import type { OperationsDashboard, OperationsDashboardQuery } from '@shared/types/operations';
 import type { PrintSettings } from '@shared/types/printConfig';
 import type { SupportedLocale } from '@shared/types/language';
+
+export async function getAppVersion(): Promise<string> {
+  return window.bertApp.config.getAppVersion();
+}
 
 export async function getPrintSettings(): Promise<PrintSettings> {
   return window.bertApp.config.getPrintSettings();
@@ -68,4 +73,28 @@ export async function saveClientConnectionSettings(
 
 export async function resetDatabaseForDevelopment(): Promise<void> {
   return window.bertApp.config.resetDatabaseForDevelopment();
+}
+
+export async function logUserAction(action: string): Promise<void> {
+  return window.bertApp.logs.logAction(action);
+}
+
+export async function logAppError(scope: string, message: string, details?: string): Promise<void> {
+  return window.bertApp.logs.logError(scope, message, details);
+}
+
+export async function logNetwork(payload: RendererNetworkLogPayload): Promise<void> {
+  return window.bertApp.logs.logNetwork(payload);
+}
+
+export async function getRecentLogFiles(): Promise<AppLogFileInfo[]> {
+  return window.bertApp.logs.listRecentFiles();
+}
+
+export async function openLogFile(fileName: string): Promise<void> {
+  return window.bertApp.logs.openFile(fileName);
+}
+
+export async function exportRecentLogFiles(): Promise<ExportLogsResult> {
+  return window.bertApp.logs.exportRecentFiles();
 }
