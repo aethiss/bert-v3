@@ -3,10 +3,12 @@ import { useIntl } from 'react-intl';
 import { toast } from 'sonner';
 import { Button } from '@ui/components/ui/button';
 import {
-  clearDistributionQueue,
-  getDistributionQueue
+  getDistributionQueue,
+  pushDistributionQueue
 } from '@renderer/services/eligibleDataService';
 import { showErrorToast } from '@renderer/lib/errorToast';
+import { useAppSelector } from '@renderer/store/hooks';
+import { selectIsOnline, selectJwt } from '@renderer/store/selectors/authSelectors';
 
 type Props = {
   pendingDistributionCount: number;
@@ -29,6 +31,7 @@ function createDistributionCsv(rows: Awaited<ReturnType<typeof getDistributionQu
     'mainOperator',
     'mainOperatorFDP',
     'subOperator',
+    'quantity',
     'appSignature',
     'notes',
     'status',
@@ -44,6 +47,7 @@ function createDistributionCsv(rows: Awaited<ReturnType<typeof getDistributionQu
       row.mainOperator,
       row.mainOperatorFDP,
       row.subOperator,
+      row.quantity,
       row.appSignature,
       row.notes,
       row.status,
@@ -71,6 +75,8 @@ export function Data({ pendingDistributionCount }: Props) {
   const [isPushConfirmOpen, setIsPushConfirmOpen] = useState(false);
   const [isPushing, setIsPushing] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
+  const jwt = useAppSelector(selectJwt);
+  const isOnline = useAppSelector(selectIsOnline);
 
   const pendingText = useMemo(() => {
     return intl.formatMessage(
@@ -82,12 +88,23 @@ export function Data({ pendingDistributionCount }: Props) {
   const handlePushDistribution = async (): Promise<void> => {
     setIsPushing(true);
     try {
-      const result = await clearDistributionQueue();
+      if (!isOnline || !jwt?.trim()) {
+        throw new Error(intl.formatMessage({ id: 'data.pushRequiresOnline' }));
+      }
+
+      const result = await pushDistributionQueue({
+        jwt: jwt.trim(),
+        batchSize: 50
+      });
       window.dispatchEvent(new Event('distribution-queue-updated'));
       toast.success(intl.formatMessage({ id: 'data.pushCompletedTitle' }), {
         description: intl.formatMessage(
           { id: 'data.pushCompletedDescription' },
-          { count: result.deleted }
+          {
+            inserted: result.totalInserted,
+            failed: result.totalFailed,
+            deleted: result.totalDeletedLocalRows
+          }
         )
       });
       setIsPushConfirmOpen(false);
@@ -137,7 +154,7 @@ export function Data({ pendingDistributionCount }: Props) {
           </div>
           <Button
             className="server-btn data-action-btn"
-            disabled={pendingDistributionCount === 0 || isPushing}
+            disabled={pendingDistributionCount === 0 || isPushing || !isOnline || !jwt}
             onClick={() => {
               setIsPushConfirmOpen(true);
             }}

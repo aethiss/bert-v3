@@ -6,6 +6,7 @@ import type {
   ClientDistributionHistoryQuery,
   ClientDistributionHistoryResult,
   DistributionQueueItem,
+  FamilyDistributionHistoryItem,
   DistributionActiveCycle,
   DistributionDetailData,
   EligibleFoodCommodityApiModel,
@@ -146,6 +147,8 @@ export interface EligibleDataService {
     query: ClientDistributionHistoryQuery
   ): Promise<ClientDistributionHistoryResult>;
   getDistributionQueue(): Promise<DistributionQueueItem[]>;
+  getFamilyDistributionHistory(familyUniqueCode: number): Promise<FamilyDistributionHistoryItem[]>;
+  deleteDistributionQueueItems(ids: number[]): Promise<{ deleted: number }>;
   getPendingDistributionCount(): Promise<number>;
   getOperationsAggregates(query: OperationsDashboardQuery): Promise<{
     totalDistributions: number;
@@ -258,6 +261,15 @@ function toSafeInteger(value: unknown): number | null {
 function asRealNumber(value: unknown): number | null {
   const parsed = asNullableNumericLike(value);
   return parsed === null ? null : parsed;
+}
+
+function normalizeQuantity(value: unknown): number {
+  const parsed = asNullableNumericLike(value);
+  if (parsed === null || !Number.isFinite(parsed)) {
+    return 1;
+  }
+
+  return Math.max(1, Math.round(parsed));
 }
 
 function normalizeFamilyUniqueCode(family: EligibleFamilyApiModel): number | null {
@@ -748,8 +760,8 @@ export function createEligibleDataService(db: Database): EligibleDataService {
 
     const household: DistributionHouseholdInfo = {
       familyUniqueCode: householdRow.familyUniqueCode,
-      idmId: String(params.memberId),
-      booklet: String(householdRow.familyUniqueCode),
+      idmId: String(householdRow.familyUniqueCode),
+      booklet: String(params.memberId),
       principle: toDisplayName(
         principleRow?.firstName ?? fallbackMember?.firstName ?? null,
         principleRow?.lastName ?? fallbackMember?.lastName ?? null
@@ -803,6 +815,9 @@ export function createEligibleDataService(db: Database): EligibleDataService {
     if (!payload.mainOperatorFDP?.trim()) {
       throw new Error('Missing mainOperatorFDP for distribution event.');
     }
+    if (!Number.isFinite(payload.quantity) || payload.quantity < 1) {
+      throw new Error('Invalid quantity for distribution event.');
+    }
 
     const duplicateRow = await db.get<{ count: number }>(
       `
@@ -832,11 +847,12 @@ export function createEligibleDataService(db: Database): EligibleDataService {
           main_operator,
           main_operator_fdp,
           sub_operator,
+          quantity,
           app_signature,
           notes,
           status
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending_local')
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending_local')
         `,
         payload.familyUniqueCode,
         payload.memberId,
@@ -844,6 +860,7 @@ export function createEligibleDataService(db: Database): EligibleDataService {
         payload.mainOperator,
         payload.mainOperatorFDP,
         payload.subOperator,
+        normalizeQuantity(payload.quantity),
         payload.appSignature,
         payload.notes
       );
@@ -932,6 +949,7 @@ export function createEligibleDataService(db: Database): EligibleDataService {
         mainOperator: number;
         mainOperatorFDP: string;
         subOperator: string | null;
+        quantity: number;
         appSignature: string;
         notes: string | null;
         status: string;
@@ -947,6 +965,7 @@ export function createEligibleDataService(db: Database): EligibleDataService {
         main_operator as mainOperator,
         main_operator_fdp as mainOperatorFDP,
         sub_operator as subOperator,
+        quantity as quantity,
         app_signature as appSignature,
         notes as notes,
         status as status,
@@ -957,6 +976,78 @@ export function createEligibleDataService(db: Database): EligibleDataService {
     );
 
     return (rows ?? []) as DistributionQueueItem[];
+  }
+
+  async function getFamilyDistributionHistory(
+    familyUniqueCode: number
+  ): Promise<FamilyDistributionHistoryItem[]> {
+    if (!Number.isFinite(familyUniqueCode)) {
+      return [];
+    }
+
+    const rows = await db.all<
+      Array<{
+        id: number;
+        familyUniqueCode: number;
+        memberId: number;
+        cycleCode: number;
+        cycleName: string | null;
+        quantity: number;
+        subOperator: string | null;
+        status: string;
+        appSignature: string;
+        notes: string | null;
+        createdAt: string;
+      }>
+    >(
+      `
+      SELECT
+        dq.id as id,
+        dq.family_unique_code as familyUniqueCode,
+        dq.member_id as memberId,
+        dq.cycle_code as cycleCode,
+        c.cycle_name as cycleName,
+        dq.quantity as quantity,
+        dq.sub_operator as subOperator,
+        dq.status as status,
+        dq.app_signature as appSignature,
+        dq.notes as notes,
+        dq.created_at as createdAt
+      FROM distribution_queue dq
+      LEFT JOIN cycles c ON c.cycle_code = dq.cycle_code
+      WHERE dq.family_unique_code = ?
+      ORDER BY dq.created_at DESC, dq.id DESC
+      `,
+      familyUniqueCode
+    );
+
+    return (rows ?? []).map((row) => ({
+      id: asNumber(row.id),
+      familyUniqueCode: asNumber(row.familyUniqueCode),
+      memberId: asNumber(row.memberId),
+      cycleCode: asNumber(row.cycleCode),
+      cycleName: asText(row.cycleName, `Cycle ${row.cycleCode}`),
+      quantity: normalizeQuantity(row.quantity),
+      subOperator: asNullableText(row.subOperator),
+      status: asText(row.status),
+      appSignature: asText(row.appSignature),
+      notes: asNullableText(row.notes),
+      createdAt: asText(row.createdAt)
+    }));
+  }
+
+  async function deleteDistributionQueueItems(ids: number[]): Promise<{ deleted: number }> {
+    const normalizedIds = ids.filter((value) => Number.isInteger(value) && value > 0);
+    if (normalizedIds.length === 0) {
+      return { deleted: 0 };
+    }
+
+    const placeholders = normalizedIds.map(() => '?').join(', ');
+    const result = await db.run(
+      `DELETE FROM distribution_queue WHERE id IN (${placeholders})`,
+      ...normalizedIds
+    );
+    return { deleted: asNumber(result.changes) };
   }
 
   async function getOperationsAggregates(
@@ -1225,6 +1316,18 @@ export function createEligibleDataService(db: Database): EligibleDataService {
     }
 
     const serverOperator = await getServerOperatorContext();
+    const quantityRow = await db.get<{ quantity: string }>(
+      `
+      SELECT quantity
+      FROM distribution_list
+      WHERE family_unique_code = ?
+        AND cycle_code = ?
+      LIMIT 1
+      `,
+      familyUniqueCode,
+      payload.cycleCode
+    );
+    const quantity = normalizeQuantity(quantityRow?.quantity);
 
     const result = await db.run(
       `
@@ -1235,11 +1338,12 @@ export function createEligibleDataService(db: Database): EligibleDataService {
         main_operator,
         main_operator_fdp,
         sub_operator,
+        quantity,
         app_signature,
         notes,
         status
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending_local')
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending_local')
       `,
       familyUniqueCode,
       payload.memberId,
@@ -1247,6 +1351,7 @@ export function createEligibleDataService(db: Database): EligibleDataService {
       serverOperator.mainOperator,
       serverOperator.mainOperatorFDP,
       subOperator,
+      quantity,
       'LAN_CLIENT',
       null
     );
@@ -1417,6 +1522,8 @@ export function createEligibleDataService(db: Database): EligibleDataService {
     saveClientDistributionHistory,
     getClientDistributionHistory,
     getDistributionQueue,
+    getFamilyDistributionHistory,
+    deleteDistributionQueueItems,
     getPendingDistributionCount,
     getOperationsAggregates,
     clearDistributionQueue,

@@ -1,8 +1,9 @@
 {
   "name": "bert-v2",
-  "version": "1.1.2",
+  "version": "2.1.1",
+  "author": "brainsen.com",
   "private": true,
-  "description": "BERT desktop app (Electron + Vite + React + TypeScript)",
+  "description": "BERT desktop app",
   "main": "dist/main/main.js",
   "engines": {
     "node": ">=24 <25"

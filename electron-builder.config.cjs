@@ -6,10 +6,22 @@ const brandingDirectory = path.join(projectRoot, 'src', 'renderer', 'assets', 'b
 const runtimeEnvPath = path.join(projectRoot, 'build', 'runtime', 'app.env');
 
 function resolvePublishConfiguration() {
+  const genericUrl = process.env.BERT_UPDATE_URL;
+  const channel = process.env.BERT_UPDATE_CHANNEL;
+
+  if (genericUrl) {
+    return [
+      {
+        provider: 'generic',
+        url: genericUrl,
+        ...(channel ? { channel } : {})
+      }
+    ];
+  }
+
   const bucket = process.env.BERT_S3_BUCKET || process.env.S3_BUCKET;
   const region = process.env.BERT_S3_REGION || process.env.AWS_REGION;
   const targetPath = process.env.BERT_S3_PATH;
-  const channel = process.env.BERT_UPDATE_CHANNEL;
 
   if (!bucket || !region || !targetPath) {
     return undefined;

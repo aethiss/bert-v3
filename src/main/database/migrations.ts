@@ -27,6 +27,7 @@ const BASE_MIGRATIONS: string[] = [
     main_operator INTEGER NOT NULL,
     main_operator_fdp TEXT NOT NULL,
     sub_operator TEXT,
+    quantity INTEGER NOT NULL DEFAULT 1,
     app_signature TEXT NOT NULL,
     notes TEXT,
     status TEXT NOT NULL DEFAULT 'pending_local',
@@ -193,6 +194,14 @@ async function ensureUserTableSchema(db: Database): Promise<void> {
   }
 }
 
+async function ensureDistributionQueueSchema(db: Database): Promise<void> {
+  const columns = await db.all<Array<{ name: string }>>('PRAGMA table_info(distribution_queue)');
+  const hasQuantity = columns.some((column) => column.name === 'quantity');
+  if (!hasQuantity) {
+    await db.exec('ALTER TABLE distribution_queue ADD COLUMN quantity INTEGER NOT NULL DEFAULT 1');
+  }
+}
+
 async function shouldRebuildEligibleCacheSchema(db: Database): Promise<boolean> {
   const familiesRow = await db.get<{ sql: string | null }>(
     "SELECT sql FROM sqlite_master WHERE type='table' AND name='families'"
@@ -263,6 +272,7 @@ export async function runMigrations(db: Database): Promise<void> {
   try {
     await execStatements(db, BASE_MIGRATIONS);
     await ensureUserTableSchema(db);
+    await ensureDistributionQueueSchema(db);
     await ensureEligibleCacheSchema(db);
     await db.exec('COMMIT');
   } catch (error) {

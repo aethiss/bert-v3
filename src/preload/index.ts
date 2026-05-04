@@ -160,6 +160,12 @@ const bertAppApi: BertAppApi = {
     getDistributionQueue() {
       return ipcRenderer.invoke('eligibleData:getDistributionQueue');
     },
+    getFamilyDistributionHistory(familyUniqueCode: number) {
+      return ipcRenderer.invoke('eligibleData:getFamilyDistributionHistory', familyUniqueCode);
+    },
+    pushDistributionQueue(params) {
+      return ipcRenderer.invoke('eligibleData:pushDistributionQueue', params);
+    },
     clearDistributionQueue() {
       return ipcRenderer.invoke('eligibleData:clearDistributionQueue');
     },

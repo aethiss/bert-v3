@@ -5,9 +5,14 @@ import { toast } from 'sonner';
 import { Button } from '@ui/components/ui/button';
 import { Input } from '@/components/ui/input';
 import type { ServerRouteComponentProps } from '@renderer/components/server/types';
-import type { DistributionDetailData, DistributionSearchResult } from '@shared/types/eligible';
+import type {
+  DistributionDetailData,
+  DistributionSearchResult,
+  FamilyDistributionHistoryItem
+} from '@shared/types/eligible';
 import { parseDocumentIdFromPdf417Payload } from '@shared/types/scanner';
 import {
+  getFamilyDistributionHistory,
   getDistributionDetail,
   saveDistributionEvent,
   searchDistributionMember
@@ -29,6 +34,19 @@ function asAgeLabel(age: number | null, fallback: string): string {
   return typeof age === 'number' ? String(age) : fallback;
 }
 
+function parseQuantity(value: string | null | undefined): number {
+  if (!value) {
+    return 1;
+  }
+
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) {
+    return 1;
+  }
+
+  return Math.max(1, Math.round(parsed));
+}
+
 export function Distribution({ route, onNavigate }: ServerRouteComponentProps) {
   const intl = useIntl();
   const currentUser = useAppSelector(selectCurrentUser);
@@ -47,6 +65,9 @@ export function Distribution({ route, onNavigate }: ServerRouteComponentProps) {
   const [isSavingDistribution, setIsSavingDistribution] = useState(false);
   const [blockingMessage, setBlockingMessage] = useState<string | null>(null);
   const [printPreviewPayload, setPrintPreviewPayload] = useState<ReceiptPayload | null>(null);
+  const [historyItems, setHistoryItems] = useState<FamilyDistributionHistoryItem[]>([]);
+  const [isHistoryOpen, setIsHistoryOpen] = useState(false);
+  const [isLoadingHistory, setIsLoadingHistory] = useState(false);
   const scanBufferRef = useRef('');
   const scanTimerRef = useRef<number | null>(null);
 
@@ -55,6 +76,8 @@ export function Distribution({ route, onNavigate }: ServerRouteComponentProps) {
   const selectedMember = (() => {
     return filteredMembers.find((member) => member.memberId === selectedMemberId) ?? null;
   })();
+
+  const selectedCycleMap = new Map(detail?.activeCycles.map((cycle) => [cycle.cycleCode, cycle]) ?? []);
 
   useEffect(() => {
     if (route.distributionMode === 'detail') {
@@ -256,6 +279,7 @@ export function Distribution({ route, onNavigate }: ServerRouteComponentProps) {
         mainOperator: mainOperator as number,
         mainOperatorFDP,
         subOperator: null,
+        quantity: parseQuantity(selectedCycle?.quantity),
         appSignature: '1234567890',
         notes: notes.trim() || null
       });
@@ -310,6 +334,45 @@ export function Distribution({ route, onNavigate }: ServerRouteComponentProps) {
     } finally {
       setIsSavingDistribution(false);
     }
+  };
+
+  const handleOpenHistory = async (): Promise<void> => {
+    if (!detail) {
+      return;
+    }
+
+    setIsLoadingHistory(true);
+    try {
+      const rows = await getFamilyDistributionHistory(detail.household.familyUniqueCode);
+      setHistoryItems(rows);
+      setIsHistoryOpen(true);
+    } catch (error) {
+      showErrorToast(error);
+    } finally {
+      setIsLoadingHistory(false);
+    }
+  };
+
+  const handlePrintHistoryItem = (item: FamilyDistributionHistoryItem): void => {
+    const cycleMeta = selectedCycleMap.get(item.cycleCode);
+    setPrintPreviewPayload({
+      title: intl.formatMessage({ id: 'distribution.receiptTitle' }),
+      headOfHousehold: detail?.household.principle ?? intl.formatMessage({ id: 'common.na' }),
+      receiptId: item.appSignature,
+      householdId: String(item.familyUniqueCode),
+      fdp: currentUser?.fdp ?? intl.formatMessage({ id: 'common.na' }),
+      collectedBy: String(item.memberId),
+      printedAtIso: item.createdAt,
+      cycles: [
+        {
+          cycleName: cycleMeta?.cycleName ?? `Cycle ${item.cycleCode}`,
+          assistanceType: cycleMeta?.assistanceType ?? intl.formatMessage({ id: 'common.na' }),
+          quantity: String(item.quantity)
+        }
+      ],
+      format: 'A5'
+    });
+    setIsHistoryOpen(false);
   };
 
   return (
@@ -384,6 +447,7 @@ export function Distribution({ route, onNavigate }: ServerRouteComponentProps) {
               <thead>
                 <tr>
                   <th>{intl.formatMessage({ id: 'table.uuid' })}</th>
+                  <th>{intl.formatMessage({ id: 'table.familyId' })}</th>
                   <th>{intl.formatMessage({ id: 'table.principle' })}</th>
                   <th>{intl.formatMessage({ id: 'table.phone' })}</th>
                   <th>{intl.formatMessage({ id: 'table.address' })}</th>
@@ -393,6 +457,7 @@ export function Distribution({ route, onNavigate }: ServerRouteComponentProps) {
               <tbody>
                 <tr>
                   <td>{result.member.id}</td>
+                  <td>{result.member.familyUniqueCode}</td>
                   <td>
                     {isPrincipleRole(result.member.role)
                       ? intl.formatMessage({ id: 'common.yes' })
@@ -463,12 +528,16 @@ export function Distribution({ route, onNavigate }: ServerRouteComponentProps) {
 
             <div className="distribution-sidebar-actions">
               <p className="distribution-detail-section-title">{intl.formatMessage({ id: 'distribution.actionsSection' })}</p>
-              <button type="button" className="distribution-link-action" disabled>
-                {intl.formatMessage({ id: 'distribution.distributionHistory' })}
-              </button>
-              <button type="button" className="distribution-link-action" disabled>
-                {intl.formatMessage({ id: 'distribution.reprint' })}
-              </button>
+              <Button
+                variant="outline"
+                className="server-btn"
+                onClick={() => void handleOpenHistory()}
+                disabled={isLoadingHistory}
+              >
+                {isLoadingHistory
+                  ? intl.formatMessage({ id: 'common.loading' })
+                  : intl.formatMessage({ id: 'distribution.distributionHistory' })}
+              </Button>
             </div>
           </aside>
 
@@ -610,6 +679,70 @@ export function Distribution({ route, onNavigate }: ServerRouteComponentProps) {
                 disabled={isSavingDistribution}
               >
                 {intl.formatMessage({ id: 'common.cancel' })}
+              </Button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {isHistoryOpen ? (
+        <div className="distribution-modal-backdrop" role="presentation">
+          <div className="distribution-modal" role="dialog" aria-modal="true">
+            <h2>{intl.formatMessage({ id: 'distribution.distributionHistory' })}</h2>
+            {historyItems.length === 0 ? (
+              <p>{intl.formatMessage({ id: 'distribution.historyEmpty' })}</p>
+            ) : (
+              <table className="distribution-detail-table">
+                <thead>
+                  <tr>
+                    <th>{intl.formatMessage({ id: 'table.date' })}</th>
+                    <th>{intl.formatMessage({ id: 'table.time' })}</th>
+                    <th>{intl.formatMessage({ id: 'table.cycle' })}</th>
+                    <th>{intl.formatMessage({ id: 'table.quantity' })}</th>
+                    <th>{intl.formatMessage({ id: 'table.actions' })}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {historyItems.map((item) => {
+                    const createdAt = new Date(item.createdAt);
+                    const date = Number.isNaN(createdAt.getTime())
+                      ? intl.formatMessage({ id: 'common.na' })
+                      : createdAt.toLocaleDateString('en-GB');
+                    const time = Number.isNaN(createdAt.getTime())
+                      ? intl.formatMessage({ id: 'common.na' })
+                      : createdAt.toLocaleTimeString('en-GB', { hour12: false });
+
+                    return (
+                      <tr key={item.id}>
+                        <td>{date}</td>
+                        <td>{time}</td>
+                        <td>{item.cycleName}</td>
+                        <td>{item.quantity}</td>
+                        <td>
+                          <Button
+                            className="server-btn"
+                            onClick={() => {
+                              handlePrintHistoryItem(item);
+                            }}
+                          >
+                            {intl.formatMessage({ id: 'actions.print' })}
+                          </Button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            )}
+            <div className="distribution-modal-actions">
+              <Button
+                variant="outline"
+                className="server-btn distribution-cancel-btn"
+                onClick={() => {
+                  setIsHistoryOpen(false);
+                }}
+              >
+                {intl.formatMessage({ id: 'common.close' })}
               </Button>
             </div>
           </div>

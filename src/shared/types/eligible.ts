@@ -144,6 +144,7 @@ export interface LocalDistributionEventInput {
   mainOperator: number;
   mainOperatorFDP: string;
   subOperator: string | null;
+  quantity: number;
   appSignature: string;
   notes: string | null;
 }
@@ -156,10 +157,48 @@ export interface DistributionQueueItem {
   mainOperator: number;
   mainOperatorFDP: string;
   subOperator: string | null;
+  quantity: number;
   appSignature: string;
   notes: string | null;
   status: string;
   createdAt: string;
+}
+
+export interface FamilyDistributionHistoryItem {
+  id: number;
+  familyUniqueCode: number;
+  memberId: number;
+  cycleCode: number;
+  cycleName: string;
+  quantity: number;
+  subOperator: string | null;
+  status: string;
+  appSignature: string;
+  notes: string | null;
+  createdAt: string;
+}
+
+export interface PushDistributionFailedItem {
+  row: number;
+  item: Record<string, unknown>;
+  errors: unknown;
+}
+
+export interface PushDistributionBatchResult {
+  batchIndex: number;
+  totalReceived: number;
+  inserted: number;
+  failed: number;
+  deletedLocalRows: number;
+  failedItems: PushDistributionFailedItem[];
+}
+
+export interface PushDistributionResult {
+  batches: PushDistributionBatchResult[];
+  totalReceived: number;
+  totalInserted: number;
+  totalFailed: number;
+  totalDeletedLocalRows: number;
 }
 
 export interface ClientDistributionInput {

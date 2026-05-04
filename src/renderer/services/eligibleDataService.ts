@@ -3,7 +3,9 @@ import type {
   ClientDistributionHistoryQuery,
   ClientDistributionHistoryResult,
   DistributionQueueItem,
+  FamilyDistributionHistoryItem,
   DistributionDetailData,
+  PushDistributionResult,
   LocalDistributionEventInput,
   DistributionSearchResult,
   EligibleMembersApiResponse,
@@ -44,6 +46,19 @@ export async function saveDistributionEvent(
 
 export async function getDistributionQueue(): Promise<DistributionQueueItem[]> {
   return window.bertApp.eligibleData.getDistributionQueue();
+}
+
+export async function getFamilyDistributionHistory(
+  familyUniqueCode: number
+): Promise<FamilyDistributionHistoryItem[]> {
+  return window.bertApp.eligibleData.getFamilyDistributionHistory(familyUniqueCode);
+}
+
+export async function pushDistributionQueue(params: {
+  jwt: string;
+  batchSize?: number;
+}): Promise<PushDistributionResult> {
+  return window.bertApp.eligibleData.pushDistributionQueue(params);
 }
 
 export async function clearDistributionQueue(): Promise<{ deleted: number }> {

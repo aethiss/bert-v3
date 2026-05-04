@@ -4,7 +4,9 @@ import type {
   ClientDistributionHistoryQuery,
   ClientDistributionHistoryResult,
   DistributionQueueItem,
+  FamilyDistributionHistoryItem,
   DistributionDetailData,
+  PushDistributionResult,
   LocalDistributionEventInput,
   DistributionSearchResult,
   EligibleMembersApiResponse,
@@ -83,6 +85,8 @@ export interface BertAppApi {
     }): Promise<DistributionDetailData | null>;
     saveDistributionEvent(payload: LocalDistributionEventInput): Promise<{ id: number }>;
     getDistributionQueue(): Promise<DistributionQueueItem[]>;
+    getFamilyDistributionHistory(familyUniqueCode: number): Promise<FamilyDistributionHistoryItem[]>;
+    pushDistributionQueue(params: { jwt: string; batchSize?: number }): Promise<PushDistributionResult>;
     clearDistributionQueue(): Promise<{ deleted: number }>;
     saveClientDistributionHistory(payload: ClientDistributionHistoryInput): Promise<{ id: number }>;
     getClientDistributionHistory(
