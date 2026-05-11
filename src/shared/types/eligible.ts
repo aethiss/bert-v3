@@ -120,6 +120,8 @@ export interface DistributionActiveCycle {
   quantity: string;
   startDate: string;
   endDate: string;
+  isDistributed: boolean;
+  foodCommodities: EligibleFoodCommodityApiModel[];
 }
 
 export interface DistributionHouseholdMember {

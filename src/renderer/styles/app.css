@@ -778,6 +778,28 @@ main {
   font-weight: 600;
 }
 
+.distribution-cycle-row {
+  cursor: pointer;
+}
+
+.distribution-cycle-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.distribution-commodity-row td {
+  background: #f7f7f8;
+}
+
+.distribution-commodity-panel {
+  padding: 8px 4px 2px;
+}
+
+.distribution-commodity-table {
+  margin-bottom: 4px;
+}
+
 .distribution-notes {
   width: 100%;
   border: 1px solid #d3d5d9;

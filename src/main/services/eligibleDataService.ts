@@ -203,6 +203,20 @@ interface DistributionActiveCycleRow {
   quantity: string;
   startDate: string;
   endDate: string;
+  isDistributed: number;
+}
+
+interface DistributionCycleCommodityRow {
+  cycleCode: number;
+  commodityId: number;
+  uniqueId: string;
+  enName: string;
+  arName: string;
+  description: string | null;
+  kcal: number | null;
+  unit: string | null;
+  quantity: number | null;
+  weight: number | null;
 }
 
 interface DistributionHouseholdMemberRow {
@@ -733,7 +747,16 @@ export function createEligibleDataService(db: Database): EligibleDataService {
         c.assistance_package_name as assistanceType,
         dl.quantity as quantity,
         c.start_date as startDate,
-        c.end_date as endDate
+        c.end_date as endDate,
+        CASE
+          WHEN EXISTS (
+            SELECT 1
+            FROM distribution_queue dq
+            WHERE dq.family_unique_code = dl.family_unique_code
+              AND dq.cycle_code = dl.cycle_code
+          ) THEN 1
+          ELSE 0
+        END as isDistributed
       FROM distribution_list dl
       INNER JOIN cycles c ON c.cycle_code = dl.cycle_code
       WHERE dl.family_unique_code = ?
@@ -758,6 +781,44 @@ export function createEligibleDataService(db: Database): EligibleDataService {
       householdRow.familyUniqueCode
     );
 
+    const commodityRows = await db.all<DistributionCycleCommodityRow[]>(
+      `
+      SELECT
+        cfc.cycle_code as cycleCode,
+        cfc.commodity_id as commodityId,
+        cfc.unique_id as uniqueId,
+        cfc.en_name as enName,
+        cfc.ar_name as arName,
+        cfc.description as description,
+        cfc.kcal as kcal,
+        cfc.unit as unit,
+        cfc.quantity as quantity,
+        cfc.weight as weight
+      FROM cycle_food_commodities cfc
+      INNER JOIN distribution_list dl ON dl.cycle_code = cfc.cycle_code
+      WHERE dl.family_unique_code = ?
+      ORDER BY cfc.cycle_code DESC, cfc.commodity_id ASC
+      `,
+      householdRow.familyUniqueCode
+    );
+
+    const commodityByCycleCode = new Map<number, EligibleFoodCommodityApiModel[]>();
+    for (const row of commodityRows) {
+      const entry = commodityByCycleCode.get(row.cycleCode) ?? [];
+      entry.push({
+        id: row.commodityId,
+        unique_id: row.uniqueId,
+        en_name: row.enName,
+        ar_name: row.arName,
+        description: row.description,
+        kcal: row.kcal,
+        unit: row.unit,
+        quantity: row.quantity,
+        weight: row.weight
+      });
+      commodityByCycleCode.set(row.cycleCode, entry);
+    }
+
     const household: DistributionHouseholdInfo = {
       familyUniqueCode: householdRow.familyUniqueCode,
       idmId: String(householdRow.familyUniqueCode),
@@ -778,7 +839,9 @@ export function createEligibleDataService(db: Database): EligibleDataService {
       assistanceType: row.assistanceType,
       quantity: row.quantity,
       startDate: formatDate(row.startDate, '01-Jan-2026'),
-      endDate: formatDate(row.endDate, '31-Jan-2026')
+      endDate: formatDate(row.endDate, '31-Jan-2026'),
+      isDistributed: asNumber(row.isDistributed) > 0,
+      foodCommodities: commodityByCycleCode.get(row.cycleCode) ?? []
     }));
 
     const members: DistributionHouseholdMember[] = memberRows.map((row) => ({
@@ -1097,10 +1160,14 @@ export function createEligibleDataService(db: Database): EligibleDataService {
     const hasSearch = search.length > 0;
 
     const clientOnlyClause = `TRIM(COALESCE(dq.sub_operator, '')) <> ''`;
-    const filterClause =
+    const clientFilterClause =
       hasSearch
         ? `WHERE ${clientOnlyClause} AND (LOWER(COALESCE(dq.sub_operator, '')) LIKE ? OR CAST(dq.member_id AS TEXT) LIKE ?)`
         : `WHERE ${clientOnlyClause}`;
+    const tableFilterClause =
+      hasSearch
+        ? "WHERE (LOWER(COALESCE(NULLIF(TRIM(dq.sub_operator), ''), NULLIF(TRIM(u.email), ''), 'server')) LIKE ? OR CAST(dq.member_id AS TEXT) LIKE ?)"
+        : '';
 
     const params: unknown[] = [];
     if (hasSearch) {
@@ -1111,11 +1178,22 @@ export function createEligibleDataService(db: Database): EligibleDataService {
       `
       SELECT COUNT(*) as count
       FROM distribution_queue dq
-      ${filterClause}
+      ${clientFilterClause}
       `,
       ...params
     );
     const totalDistributions = asNumber(totalRow?.count);
+
+    const tableTotalRow = await db.get<{ count: number }>(
+      `
+      SELECT COUNT(*) as count
+      FROM distribution_queue dq
+      LEFT JOIN "user" u ON u.user_id = dq.main_operator
+      ${tableFilterClause}
+      `,
+      ...params
+    );
+    const totalTableDistributions = asNumber(tableTotalRow?.count);
 
     const cycleRows = await db.all<
       Array<{
@@ -1196,6 +1274,7 @@ export function createEligibleDataService(db: Database): EligibleDataService {
       Array<{
         id: number;
         subOperator: string | null;
+        operatorEmail: string | null;
         memberId: number;
         cycleCode: number;
         cycleName: string | null;
@@ -1207,6 +1286,7 @@ export function createEligibleDataService(db: Database): EligibleDataService {
       SELECT
         dq.id as id,
         dq.sub_operator as subOperator,
+        u.email as operatorEmail,
         dq.member_id as memberId,
         dq.cycle_code as cycleCode,
         c.cycle_name as cycleName,
@@ -1214,7 +1294,8 @@ export function createEligibleDataService(db: Database): EligibleDataService {
         dq.created_at as createdAt
       FROM distribution_queue dq
       LEFT JOIN cycles c ON c.cycle_code = dq.cycle_code
-      ${filterClause}
+      LEFT JOIN "user" u ON u.user_id = dq.main_operator
+      ${tableFilterClause}
       ORDER BY dq.created_at DESC, dq.id DESC
       LIMIT ? OFFSET ?
       `,
@@ -1242,7 +1323,8 @@ export function createEligibleDataService(db: Database): EligibleDataService {
 
       return {
         id: asNumber(row.id),
-        subOperator: asText(row.subOperator, 'Unknown'),
+        subOperator:
+          asText(row.subOperator).trim() || asText(row.operatorEmail).trim() || 'SERVER',
         memberId: asNumber(row.memberId),
         date,
         time,
@@ -1260,10 +1342,10 @@ export function createEligibleDataService(db: Database): EligibleDataService {
       clientCycleCounts,
       distributions: {
         items,
-        total: totalDistributions,
+        total: totalTableDistributions,
         page: safePage,
         pageSize: safePageSize,
-        totalPages: Math.max(1, Math.ceil(totalDistributions / safePageSize))
+        totalPages: Math.max(1, Math.ceil(totalTableDistributions / safePageSize))
       }
     };
   }

@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from 'react';
-import { ExternalLink, ScanLine, Search } from 'lucide-react';
+import { Fragment, useEffect, useRef, useState } from 'react';
+import { ChevronDown, ChevronRight, ExternalLink, Printer, ScanLine, Search } from 'lucide-react';
 import { useIntl } from 'react-intl';
 import { toast } from 'sonner';
 import { Button } from '@ui/components/ui/button';
@@ -57,7 +57,7 @@ export function Distribution({ route, onNavigate }: ServerRouteComponentProps) {
   const [isSearching, setIsSearching] = useState(false);
   const [isLoadingDetail, setIsLoadingDetail] = useState(false);
   const [detail, setDetail] = useState<DistributionDetailData | null>(null);
-  const [selectedCycleCode, setSelectedCycleCode] = useState<number | null>(null);
+  const [selectedCycleCodes, setSelectedCycleCodes] = useState<number[]>([]);
   const [selectedMemberId, setSelectedMemberId] = useState<number | null>(null);
   const [notes, setNotes] = useState('');
   const [isVerifyModalOpen, setIsVerifyModalOpen] = useState(false);
@@ -68,6 +68,8 @@ export function Distribution({ route, onNavigate }: ServerRouteComponentProps) {
   const [historyItems, setHistoryItems] = useState<FamilyDistributionHistoryItem[]>([]);
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
+  const [isReprintingCycleCode, setIsReprintingCycleCode] = useState<number | null>(null);
+  const [expandedCycleCodes, setExpandedCycleCodes] = useState<number[]>([]);
   const scanBufferRef = useRef('');
   const scanTimerRef = useRef<number | null>(null);
 
@@ -208,12 +210,14 @@ export function Distribution({ route, onNavigate }: ServerRouteComponentProps) {
         return;
       }
 
-      const defaultCycle = detailData.activeCycles[0]?.cycleCode ?? null;
+      const defaultCycle =
+        detailData.activeCycles.find((cycle) => !cycle.isDistributed)?.cycleCode ?? null;
       const defaultMember = detailData.members.find((member) => member.memberId === result.member.id);
       const fallbackMember = detailData.members[0] ?? null;
 
       setDetail(detailData);
-      setSelectedCycleCode(defaultCycle);
+      setSelectedCycleCodes(defaultCycle !== null ? [defaultCycle] : []);
+      setExpandedCycleCodes([]);
       setSelectedMemberId(defaultMember?.memberId ?? fallbackMember?.memberId ?? null);
       setNotes('');
       setBlockingMessage(null);
@@ -231,7 +235,12 @@ export function Distribution({ route, onNavigate }: ServerRouteComponentProps) {
   };
 
   const handleConfirm = async (): Promise<void> => {
-    if (!detail || selectedCycleCode === null || selectedMemberId === null || !selectedMember) {
+    if (
+      !detail ||
+      selectedCycleCodes.length === 0 ||
+      selectedMemberId === null ||
+      !selectedMember
+    ) {
       toast.error(intl.formatMessage({ id: 'common.error' }), {
         description: intl.formatMessage({ id: 'distribution.selectCycleError' })
       });
@@ -270,19 +279,44 @@ export function Distribution({ route, onNavigate }: ServerRouteComponentProps) {
     setIsSavingDistribution(true);
     setBlockingMessage(null);
     try {
-      const selectedCycle =
-        detail.activeCycles.find((cycle) => cycle.cycleCode === selectedCycleCode) ?? null;
-      await saveDistributionEvent({
-        familyUniqueCode: detail.household.familyUniqueCode,
-        memberId: selectedMemberId,
-        cycleCode: selectedCycleCode,
-        mainOperator: mainOperator as number,
-        mainOperatorFDP,
-        subOperator: null,
-        quantity: parseQuantity(selectedCycle?.quantity),
-        appSignature: '1234567890',
-        notes: notes.trim() || null
-      });
+      const selectedCycles = detail.activeCycles.filter(
+        (cycle) => selectedCycleCodes.includes(cycle.cycleCode) && !cycle.isDistributed
+      );
+      const savedCycles: DistributionDetailData['activeCycles'] = [];
+      const duplicateCycles: number[] = [];
+
+      for (const cycle of selectedCycles) {
+        try {
+          await saveDistributionEvent({
+            familyUniqueCode: detail.household.familyUniqueCode,
+            memberId: selectedMemberId,
+            cycleCode: cycle.cycleCode,
+            mainOperator: mainOperator as number,
+            mainOperatorFDP,
+            subOperator: null,
+            quantity: parseQuantity(cycle.quantity),
+            appSignature: '1234567890',
+            notes: notes.trim() || null
+          });
+          savedCycles.push(cycle);
+        } catch (error) {
+          const message = error instanceof Error ? error.message.toLowerCase() : '';
+          if (message.includes('duplicate distribution blocked')) {
+            duplicateCycles.push(cycle.cycleCode);
+            continue;
+          }
+          throw error;
+        }
+      }
+
+      if (savedCycles.length === 0) {
+        const visibleMessage = intl.formatMessage({ id: 'distribution.blockedDescription' });
+        setBlockingMessage(visibleMessage);
+        toast.error(intl.formatMessage({ id: 'distribution.blockedTitle' }), {
+          description: visibleMessage
+        });
+        return;
+      }
 
       window.dispatchEvent(new Event('distribution-queue-updated'));
 
@@ -290,9 +324,21 @@ export function Distribution({ route, onNavigate }: ServerRouteComponentProps) {
       setVerifyInput('');
       const printSettings = await getPrintSettings();
       if (printSettings.disabled) {
-        toast.success(intl.formatMessage({ id: 'common.saved' }), {
-          description: intl.formatMessage({ id: 'distribution.savedLocalDescription' })
-        });
+        if (duplicateCycles.length > 0) {
+          toast.success(intl.formatMessage({ id: 'common.saved' }), {
+            description: intl.formatMessage(
+              { id: 'distribution.savedPartialDescription' },
+              { saved: savedCycles.length, skipped: duplicateCycles.length }
+            )
+          });
+        } else {
+          toast.success(intl.formatMessage({ id: 'common.saved' }), {
+            description: intl.formatMessage(
+              { id: 'distribution.savedLocalMultiDescription' },
+              { count: savedCycles.length }
+            )
+          });
+        }
         onNavigate({
           ...route,
           section: 'distribution',
@@ -309,17 +355,22 @@ export function Distribution({ route, onNavigate }: ServerRouteComponentProps) {
         fdp: currentUser?.fdp ?? intl.formatMessage({ id: 'common.na' }),
         collectedBy: hideMiddleNumbers(selectedMember.documentNumber ?? String(selectedMember.memberId)),
         printedAtIso: new Date().toISOString(),
-        cycles: selectedCycle
-          ? [
-              {
-                cycleName: selectedCycle.cycleName,
-                assistanceType: selectedCycle.assistanceType,
-                quantity: selectedCycle.quantity
-              }
-            ]
-          : [],
+        cycles: savedCycles.map((cycle) => ({
+          cycleName: cycle.cycleName,
+          assistanceType: cycle.assistanceType,
+          quantity: cycle.quantity
+        })),
         format: printSettings.format
       });
+
+      if (duplicateCycles.length > 0) {
+        toast.success(intl.formatMessage({ id: 'common.saved' }), {
+          description: intl.formatMessage(
+            { id: 'distribution.savedPartialDescription' },
+            { saved: savedCycles.length, skipped: duplicateCycles.length }
+          )
+        });
+      }
     } catch (error) {
       const message = error instanceof Error ? error.message : '';
       if (message.toLowerCase().includes('duplicate distribution blocked')) {
@@ -333,6 +384,50 @@ export function Distribution({ route, onNavigate }: ServerRouteComponentProps) {
       showErrorToast(error);
     } finally {
       setIsSavingDistribution(false);
+    }
+  };
+
+  const handleReprintCycle = async (cycleCode: number): Promise<void> => {
+    if (!detail) {
+      return;
+    }
+
+    setIsReprintingCycleCode(cycleCode);
+    try {
+      const rows = await getFamilyDistributionHistory(detail.household.familyUniqueCode);
+      const historyItem = rows.find((item) => item.cycleCode === cycleCode);
+      if (!historyItem) {
+        toast.error(intl.formatMessage({ id: 'common.error' }), {
+          description: intl.formatMessage({ id: 'distribution.historyEmpty' })
+        });
+        return;
+      }
+
+      const cycleMeta = selectedCycleMap.get(cycleCode);
+      const memberMeta = detail.members.find((member) => member.memberId === historyItem.memberId);
+      const printSettings = await getPrintSettings();
+
+      setPrintPreviewPayload({
+        title: intl.formatMessage({ id: 'distribution.receiptTitle' }),
+        headOfHousehold: detail.household.principle || memberMeta?.fullName || intl.formatMessage({ id: 'common.na' }),
+        receiptId: historyItem.appSignature || '1234567890',
+        householdId: String(historyItem.familyUniqueCode),
+        fdp: currentUser?.fdp ?? intl.formatMessage({ id: 'common.na' }),
+        collectedBy: hideMiddleNumbers(memberMeta?.documentNumber ?? String(historyItem.memberId)),
+        printedAtIso: historyItem.createdAt,
+        cycles: [
+          {
+            cycleName: cycleMeta?.cycleName ?? historyItem.cycleName,
+            assistanceType: cycleMeta?.assistanceType ?? intl.formatMessage({ id: 'common.na' }),
+            quantity: String(historyItem.quantity)
+          }
+        ],
+        format: printSettings.format
+      });
+    } catch (error) {
+      showErrorToast(error);
+    } finally {
+      setIsReprintingCycleCode(null);
     }
   };
 
@@ -552,28 +647,121 @@ export function Distribution({ route, onNavigate }: ServerRouteComponentProps) {
                   <th>{intl.formatMessage({ id: 'table.quantity' })}</th>
                   <th>{intl.formatMessage({ id: 'table.startDate' })}</th>
                   <th>{intl.formatMessage({ id: 'table.endDate' })}</th>
+                  <th>{intl.formatMessage({ id: 'table.actions' })}</th>
                 </tr>
               </thead>
               <tbody>
-                {detail.activeCycles.map((cycle) => (
-                  <tr key={cycle.cycleCode}>
-                    <td>
-                      <input
-                        type="radio"
-                        name="selected-cycle"
-                        checked={selectedCycleCode === cycle.cycleCode}
-                        onChange={() => {
-                          setSelectedCycleCode(cycle.cycleCode);
+                {detail.activeCycles.map((cycle) => {
+                  const isExpanded = expandedCycleCodes.includes(cycle.cycleCode);
+                  return (
+                    <Fragment key={cycle.cycleCode}>
+                      <tr
+                        className="distribution-cycle-row"
+                        onClick={() => {
+                          setExpandedCycleCodes((previous) => {
+                            if (previous.includes(cycle.cycleCode)) {
+                              return previous.filter((value) => value !== cycle.cycleCode);
+                            }
+                            return [...previous, cycle.cycleCode];
+                          });
                         }}
-                      />
-                    </td>
-                    <td>{cycle.cycleName}</td>
-                    <td>{cycle.assistanceType}</td>
-                    <td>{cycle.quantity}</td>
-                    <td>{cycle.startDate}</td>
-                    <td>{cycle.endDate}</td>
-                  </tr>
-                ))}
+                      >
+                        <td
+                          onClick={(event) => {
+                            event.stopPropagation();
+                          }}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={selectedCycleCodes.includes(cycle.cycleCode)}
+                            disabled={cycle.isDistributed}
+                            onChange={() => {
+                              if (cycle.isDistributed) {
+                                return;
+                              }
+                              setSelectedCycleCodes((previous) => {
+                                if (previous.includes(cycle.cycleCode)) {
+                                  return previous.filter((value) => value !== cycle.cycleCode);
+                                }
+                                return [...previous, cycle.cycleCode];
+                              });
+                            }}
+                          />
+                        </td>
+                        <td>
+                          <span className="distribution-cycle-name">
+                            {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                            {cycle.cycleName}
+                          </span>
+                        </td>
+                        <td>{cycle.assistanceType}</td>
+                        <td>{cycle.quantity}</td>
+                        <td>{cycle.startDate}</td>
+                        <td>{cycle.endDate}</td>
+                        <td
+                          onClick={(event) => {
+                            event.stopPropagation();
+                          }}
+                        >
+                          {cycle.isDistributed ? (
+                            <button
+                              type="button"
+                              className="distribution-action-btn"
+                              onClick={() => {
+                                void handleReprintCycle(cycle.cycleCode);
+                              }}
+                              disabled={isReprintingCycleCode === cycle.cycleCode}
+                            >
+                              <Printer size={14} className="distribution-btn-icon" />
+                              {isReprintingCycleCode === cycle.cycleCode
+                                ? intl.formatMessage({ id: 'common.loading' })
+                                : intl.formatMessage({ id: 'distribution.reprint' })}
+                            </button>
+                          ) : null}
+                        </td>
+                      </tr>
+                      {isExpanded ? (
+                        <tr className="distribution-commodity-row">
+                          <td colSpan={7}>
+                            <div className="distribution-commodity-panel">
+                              <p className="distribution-detail-section-title">
+                                {intl.formatMessage({ id: 'distribution.foodCommodities' })}
+                              </p>
+                              {cycle.foodCommodities.length === 0 ? (
+                                <p className="distribution-empty">
+                                  {intl.formatMessage({ id: 'distribution.foodCommoditiesEmpty' })}
+                                </p>
+                              ) : (
+                                <table className="distribution-detail-table distribution-commodity-table">
+                                  <thead>
+                                    <tr>
+                                      <th>{intl.formatMessage({ id: 'table.id' })}</th>
+                                      <th>{intl.formatMessage({ id: 'table.name' })}</th>
+                                      <th>{intl.formatMessage({ id: 'table.quantity' })}</th>
+                                      <th>{intl.formatMessage({ id: 'distribution.unit' })}</th>
+                                      <th>{intl.formatMessage({ id: 'distribution.weight' })}</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {cycle.foodCommodities.map((commodity) => (
+                                      <tr key={`${cycle.cycleCode}-${commodity.id}-${commodity.unique_id}`}>
+                                        <td>{commodity.id}</td>
+                                        <td>{commodity.en_name || commodity.ar_name || intl.formatMessage({ id: 'common.na' })}</td>
+                                        <td>{commodity.quantity ?? intl.formatMessage({ id: 'common.na' })}</td>
+                                        <td>{commodity.unit ?? intl.formatMessage({ id: 'common.na' })}</td>
+                                        <td>{commodity.weight ?? intl.formatMessage({ id: 'common.na' })}</td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      ) : null}
+                    </Fragment>
+                  );
+                })}
               </tbody>
             </table>
 
@@ -625,7 +813,7 @@ export function Distribution({ route, onNavigate }: ServerRouteComponentProps) {
                 onClick={() => {
                   setIsVerifyModalOpen(true);
                 }}
-                disabled={selectedCycleCode === null || selectedMemberId === null}
+                disabled={selectedCycleCodes.length === 0 || selectedMemberId === null}
               >
                 {intl.formatMessage({ id: 'actions.confirm' })}
               </Button>

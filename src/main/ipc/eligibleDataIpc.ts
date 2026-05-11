@@ -169,6 +169,7 @@ export function registerEligibleDataIpc(
           const response = await fetch(endpointUrl, {
             method: 'POST',
             headers: {
+              accept: 'application/json',
               'content-type': 'application/json',
               authorization: `Bearer ${jwt}`
             },
@@ -204,12 +205,49 @@ export function registerEligibleDataIpc(
             durationMs
           });
 
-          const payload = JSON.parse(rawBody) as {
+          const contentType = response.headers.get('content-type') ?? '';
+          const isJsonResponse = contentType.toLowerCase().includes('application/json');
+          if (!isJsonResponse) {
+            await logService.logError(
+              'eligibleData:pushDistributionQueue',
+              'Bulk distribution endpoint returned non-JSON response',
+              {
+                expectedContentType: 'application/json',
+                actualContentType: contentType || 'unknown',
+                finalUrl: response.url,
+                redirected: response.redirected,
+                bodyPreview: rawBody.slice(0, 500)
+              }
+            );
+            throw new Error(
+              `Bulk distribution endpoint returned non-JSON response (${contentType || 'unknown'}). Final URL: ${response.url}`
+            );
+          }
+
+          let payload: {
             total_received?: number;
             total_inserted?: number;
             total_failed?: number;
             failed_items?: Array<{ row?: number; item?: Record<string, unknown>; errors?: unknown }>;
           };
+          try {
+            payload = JSON.parse(rawBody) as {
+              total_received?: number;
+              total_inserted?: number;
+              total_failed?: number;
+              failed_items?: Array<{ row?: number; item?: Record<string, unknown>; errors?: unknown }>;
+            };
+          } catch (parseError) {
+            await logService.logError('eligibleData:pushDistributionQueue', parseError, {
+              message: 'Invalid JSON response while pushing distributions',
+              finalUrl: response.url,
+              redirected: response.redirected,
+              bodyPreview: rawBody.slice(0, 500)
+            });
+            throw new Error(
+              `Bulk distribution endpoint returned invalid JSON. Final URL: ${response.url}`
+            );
+          }
 
           const failedRows = new Set(
             (payload.failed_items ?? [])
