@@ -1,68 +1,9 @@
-import { BrowserWindow, app } from 'electron';
-import {
-  autoUpdater,
-  type ProgressInfo,
-  type UpdateInfo
-} from 'electron-updater';
+import { BrowserWindow, app, shell } from 'electron';
 import type { UpdaterPhase, UpdaterState } from '../../shared/types/ipc/updater';
+import { getEnvValue } from './envService';
 
 const UPDATE_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
 const UPDATER_STATE_CHANGED_CHANNEL = 'updater:stateChanged';
-
-function serializeReleaseNotes(releaseNotes: UpdateInfo['releaseNotes']): string | null {
-  if (typeof releaseNotes === 'string') {
-    const normalized = releaseNotes.trim();
-    return normalized || null;
-  }
-
-  if (!Array.isArray(releaseNotes)) {
-    return null;
-  }
-
-  const entries = releaseNotes
-    .map((entry) => {
-      const note = entry as { version?: string | null; note?: string | null };
-      const version = typeof note.version === 'string' ? note.version.trim() : '';
-      const content = typeof note.note === 'string' ? note.note.trim() : '';
-      if (!version && !content) {
-        return null;
-      }
-      if (!version) {
-        return content;
-      }
-      if (!content) {
-        return version;
-      }
-      return `${version}\n${content}`;
-    })
-    .filter((value): value is string => Boolean(value));
-
-  return entries.length > 0 ? entries.join('\n\n') : null;
-}
-
-function resolveDisableReason(): string | null {
-  if (app.isPackaged) {
-    if (process.platform === 'win32' || process.platform === 'darwin') {
-      return null;
-    }
-    return 'Auto-update is supported only on packaged Windows and macOS builds.';
-  }
-
-  return 'Auto-update is available only in packaged application builds.';
-}
-
-function toIsoDate(value: string | Date | null | undefined): string | null {
-  if (!value) {
-    return null;
-  }
-
-  const parsed = value instanceof Date ? value : new Date(value);
-  if (Number.isNaN(parsed.getTime())) {
-    return null;
-  }
-
-  return parsed.toISOString();
-}
 
 function formatError(error: unknown): string {
   if (error instanceof Error) {
@@ -72,12 +13,57 @@ function formatError(error: unknown): string {
   return String(error);
 }
 
+function normalizeVersion(version: string): string {
+  const trimmed = version.trim();
+  if (!trimmed) {
+    return '';
+  }
+
+  return trimmed.toLowerCase().startsWith('v') ? trimmed : `v${trimmed}`;
+}
+
+function extractVersionFromMessage(message: string): string | null {
+  const match = message.match(/v?\d+(?:\.\d+)+/i);
+  return match?.[0] ?? null;
+}
+
+function resolveApiBase(): string {
+  const apiBase = getEnvValue('RENDERER_VITE_API_URL') ?? getEnvValue('VITE_API_URL');
+  if (!apiBase) {
+    throw new Error('Missing API base URL. Set RENDERER_VITE_API_URL or VITE_API_URL.');
+  }
+
+  return apiBase;
+}
+
+function resolveCheckVersionUrl(clientVersion: string): string {
+  const apiBase = resolveApiBase();
+  const endpointPath =
+    getEnvValue('RENDERER_VITE_CHECK_BERT_VERSION_PATH') ??
+    getEnvValue('VITE_CHECK_BERT_VERSION_PATH') ??
+    '/api/v1/check-bert-version/';
+
+  const url = new URL(endpointPath, apiBase);
+  url.searchParams.set('version', normalizeVersion(clientVersion));
+  return url.toString();
+}
+
+function resolveLatestVersionUrl(): string {
+  const apiBase = resolveApiBase();
+  const endpointPath =
+    getEnvValue('RENDERER_VITE_LAST_BERT_VERSION_PATH') ??
+    getEnvValue('VITE_LAST_BERT_VERSION_PATH') ??
+    '/api/v1/last-bert-version/';
+
+  return new URL(endpointPath, apiBase).toString();
+}
+
 export interface UpdateService {
   start(): void;
   dispose(): void;
   getState(): Promise<UpdaterState>;
-  checkForUpdates(): Promise<UpdaterState>;
-  downloadUpdate(): Promise<UpdaterState>;
+  checkForUpdates(jwt: string): Promise<UpdaterState>;
+  downloadUpdate(jwt: string): Promise<UpdaterState>;
   installUpdate(): Promise<void>;
   onStateChanged(listener: (state: UpdaterState) => void): () => void;
 }
@@ -88,23 +74,17 @@ export interface UpdateServiceOptions {
 
 export function createUpdateService(options: UpdateServiceOptions): UpdateService {
   const listeners = new Set<(state: UpdaterState) => void>();
-  const disableReason = resolveDisableReason();
-  const isSupported = disableReason === null;
   const currentVersion = app.getVersion();
 
-  let phase: UpdaterPhase = isSupported ? 'idle' : 'disabled';
-  let availableInfo: UpdateInfo | null = null;
-  let downloadedInfo: UpdateInfo | null = null;
+  let phase: UpdaterPhase = 'idle';
+  let availableVersion: string | null = null;
+  let downloadedVersion: string | null = null;
   let lastCheckedAt: string | null = null;
   let lastError: string | null = null;
-  let downloadProgress: ProgressInfo | null = null;
+  let releaseNotes: string | null = null;
   let pendingDistributionCount = 0;
   let started = false;
   let checkTimer: NodeJS.Timeout | null = null;
-
-  autoUpdater.autoDownload = false;
-  autoUpdater.autoInstallOnAppQuit = false;
-  autoUpdater.allowPrerelease = false;
 
   function broadcast(state: UpdaterState): void {
     for (const listener of listeners) {
@@ -134,30 +114,24 @@ export function createUpdateService(options: UpdateServiceOptions): UpdateServic
 
     return {
       phase,
-      isSupported,
-      disableReason,
+      isSupported: true,
+      disableReason: null,
       currentVersion,
-      availableVersion: availableInfo?.version ?? null,
-      downloadedVersion: downloadedInfo?.version ?? null,
-      releaseName: downloadedInfo?.releaseName ?? availableInfo?.releaseName ?? null,
-      releaseDate:
-        toIsoDate(downloadedInfo?.releaseDate) ?? toIsoDate(availableInfo?.releaseDate) ?? null,
-      releaseNotes:
-        serializeReleaseNotes(downloadedInfo?.releaseNotes) ??
-        serializeReleaseNotes(availableInfo?.releaseNotes) ??
-        null,
+      availableVersion,
+      downloadedVersion,
+      releaseName: null,
+      releaseDate: null,
+      releaseNotes,
       lastCheckedAt,
-      downloadPercent: typeof downloadProgress?.percent === 'number' ? downloadProgress.percent : null,
-      bytesPerSecond:
-        typeof downloadProgress?.bytesPerSecond === 'number' ? downloadProgress.bytesPerSecond : null,
-      transferredBytes:
-        typeof downloadProgress?.transferred === 'number' ? downloadProgress.transferred : null,
-      totalBytes: typeof downloadProgress?.total === 'number' ? downloadProgress.total : null,
+      downloadPercent: null,
+      bytesPerSecond: null,
+      transferredBytes: null,
+      totalBytes: null,
       pendingDistributionCount,
       lastError,
-      canCheck: isSupported && phase !== 'checking' && phase !== 'downloading' && phase !== 'installing',
-      canDownload: isSupported && phase === 'available',
-      canInstall: isSupported && phase === 'downloaded' && pendingDistributionCount === 0
+      canCheck: phase !== 'checking' && phase !== 'downloading' && phase !== 'installing',
+      canDownload: phase === 'available',
+      canInstall: false
     };
   }
 
@@ -167,86 +141,20 @@ export function createUpdateService(options: UpdateServiceOptions): UpdateServic
     return state;
   }
 
-  function attachUpdaterEvents(): void {
-    autoUpdater.on('checking-for-update', () => {
-      phase = 'checking';
-      lastError = null;
-      lastCheckedAt = new Date().toISOString();
-      downloadProgress = null;
-      void publishState();
-    });
-
-    autoUpdater.on('update-available', (info) => {
-      phase = 'available';
-      availableInfo = info;
-      downloadedInfo = null;
-      lastError = null;
-      downloadProgress = null;
-      void publishState();
-    });
-
-    autoUpdater.on('update-not-available', () => {
-      phase = 'idle';
-      availableInfo = null;
-      downloadedInfo = null;
-      lastError = null;
-      downloadProgress = null;
-      void publishState();
-    });
-
-    autoUpdater.on('download-progress', (progress) => {
-      phase = 'downloading';
-      downloadProgress = progress;
-      lastError = null;
-      void publishState();
-    });
-
-    autoUpdater.on('update-downloaded', (info) => {
-      phase = 'downloaded';
-      downloadedInfo = info;
-      availableInfo = info;
-      lastError = null;
-      downloadProgress = null;
-      void publishState();
-    });
-
-    autoUpdater.on('error', (error) => {
-      phase = availableInfo ? 'available' : downloadedInfo ? 'downloaded' : 'error';
-      lastError = formatError(error);
-      downloadProgress = null;
-      console.error('[updater] Update flow error', error);
-      void publishState();
-    });
-  }
-
-  async function runSilentCheck(): Promise<void> {
-    try {
-      await checkForUpdates();
-    } catch (error) {
-      console.warn('[updater] Silent update check failed', error);
-    }
-  }
-
   function start(): void {
     if (started) {
       return;
     }
 
     started = true;
-    attachUpdaterEvents();
     void publishState();
 
-    if (!isSupported) {
-      return;
-    }
-
-    const initialDelay = 10_000;
-    setTimeout(() => {
-      void runSilentCheck();
-    }, initialDelay);
-
     checkTimer = setInterval(() => {
-      void runSilentCheck();
+      void refreshPendingDistributionCount()
+        .then(() => publishState())
+        .catch((error) => {
+          console.warn('[updater] Silent state refresh failed', error);
+        });
     }, UPDATE_CHECK_INTERVAL_MS);
   }
 
@@ -261,56 +169,116 @@ export function createUpdateService(options: UpdateServiceOptions): UpdateServic
     return buildState();
   }
 
-  async function checkForUpdates(): Promise<UpdaterState> {
-    if (!isSupported) {
-      return buildState();
+  async function checkForUpdates(jwt: string): Promise<UpdaterState> {
+    const token = jwt.trim();
+    if (!token) {
+      throw new Error('Missing JWT token for version check.');
     }
 
-    await autoUpdater.checkForUpdates();
-    return buildState();
+    phase = 'checking';
+    lastCheckedAt = new Date().toISOString();
+    lastError = null;
+    await publishState();
+
+    try {
+      const url = resolveCheckVersionUrl(currentVersion);
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          authorization: `Bearer ${token}`,
+          accept: 'application/json'
+        }
+      });
+
+      const rawBody = await response.text();
+      if (!response.ok) {
+        throw new Error(`Version check failed (${response.status} ${response.statusText}). ${rawBody.slice(0, 200)}`);
+      }
+
+      let payload: { message?: string };
+      try {
+        payload = JSON.parse(rawBody) as { message?: string };
+      } catch {
+        throw new Error('Version check returned an invalid JSON response.');
+      }
+
+      const message = (payload.message ?? '').trim();
+      releaseNotes = message || null;
+
+      if (message.toLowerCase() === 'you are using the last version') {
+        phase = 'idle';
+        availableVersion = null;
+        downloadedVersion = null;
+      } else {
+        phase = 'available';
+        availableVersion = extractVersionFromMessage(message);
+        downloadedVersion = null;
+      }
+
+      return publishState();
+    } catch (error) {
+      phase = 'error';
+      lastError = formatError(error);
+      await publishState();
+      throw error;
+    }
   }
 
-  async function downloadUpdate(): Promise<UpdaterState> {
-    if (!isSupported) {
-      return buildState();
-    }
-
-    if (phase === 'downloaded') {
-      return buildState();
+  async function downloadUpdate(jwt: string): Promise<UpdaterState> {
+    const token = jwt.trim();
+    if (!token) {
+      throw new Error('Missing JWT token for latest version download.');
     }
 
     if (phase !== 'available') {
       throw new Error('No update is available to download right now.');
     }
 
-    lastError = null;
-    await autoUpdater.downloadUpdate();
-    return buildState();
-  }
-
-  async function installUpdate(): Promise<void> {
-    if (!isSupported) {
-      return;
-    }
-
-    await refreshPendingDistributionCount();
-    if (pendingDistributionCount > 0) {
-      throw new Error(
-        'Update installation is blocked until all pending distributions have been sent.'
-      );
-    }
-
-    if (phase !== 'downloaded') {
-      throw new Error('No downloaded update is ready to install.');
-    }
-
-    phase = 'installing';
+    phase = 'downloading';
     lastError = null;
     await publishState();
 
-    setImmediate(() => {
-      autoUpdater.quitAndInstall(false, true);
-    });
+    try {
+      const url = resolveLatestVersionUrl();
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          authorization: `Bearer ${token}`,
+          accept: 'application/json'
+        }
+      });
+
+      const rawBody = await response.text();
+      if (!response.ok) {
+        throw new Error(`Latest version request failed (${response.status} ${response.statusText}). ${rawBody.slice(0, 200)}`);
+      }
+
+      let payload: { download_url?: string };
+      try {
+        payload = JSON.parse(rawBody) as { download_url?: string };
+      } catch {
+        throw new Error('Latest version API returned an invalid JSON response.');
+      }
+
+      const downloadUrl = payload.download_url?.trim();
+      if (!downloadUrl) {
+        throw new Error('Latest version API returned an empty download_url.');
+      }
+
+      await shell.openExternal(downloadUrl);
+      phase = 'downloaded';
+      downloadedVersion = availableVersion;
+      return publishState();
+    } catch (error) {
+      phase = 'available';
+      lastError = formatError(error);
+      await publishState();
+      throw error;
+    }
+  }
+
+  async function installUpdate(): Promise<void> {
+    throw new Error('Automatic install is disabled. Download and run the installer manually.');
   }
 
   function onStateChanged(listener: (state: UpdaterState) => void): () => void {

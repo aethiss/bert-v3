@@ -35,18 +35,18 @@ export async function getUpdaterState(): Promise<UpdaterState> {
   return window.bertApp.updater.getState();
 }
 
-export async function checkForUpdates(): Promise<UpdaterState> {
+export async function checkForUpdates(jwt: string): Promise<UpdaterState> {
   if (!hasUpdaterApi()) {
     return getFallbackState();
   }
-  return window.bertApp.updater.checkForUpdates();
+  return window.bertApp.updater.checkForUpdates(jwt);
 }
 
-export async function downloadUpdate(): Promise<UpdaterState> {
+export async function downloadUpdate(jwt: string): Promise<UpdaterState> {
   if (!hasUpdaterApi()) {
     return getFallbackState();
   }
-  return window.bertApp.updater.downloadUpdate();
+  return window.bertApp.updater.downloadUpdate(jwt);
 }
 
 export async function installUpdate(): Promise<void> {

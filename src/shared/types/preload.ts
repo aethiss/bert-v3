@@ -43,8 +43,8 @@ export interface BertAppApi {
   };
   updater: {
     getState(): Promise<UpdaterState>;
-    checkForUpdates(): Promise<UpdaterState>;
-    downloadUpdate(): Promise<UpdaterState>;
+    checkForUpdates(jwt: string): Promise<UpdaterState>;
+    downloadUpdate(jwt: string): Promise<UpdaterState>;
     installUpdate(): Promise<void>;
     onStateChanged(listener: (state: UpdaterState) => void): () => void;
   };

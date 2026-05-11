@@ -265,6 +265,7 @@
   "table.uuid": "UUID",
   "updater.availableVersion": "الإصدار المتاح",
   "updater.availableVersionFallback": "لم يتم العثور على تحديث",
+  "updater.authRequired": "يجب تسجيل الدخول عبر الإنترنت للتحقق من التحديثات أو تنزيلها.",
   "updater.checkButton": "التحقق من التحديثات",
   "updater.checkingButton": "جارٍ التحقق...",
   "updater.currentVersion": "الإصدار الحالي",

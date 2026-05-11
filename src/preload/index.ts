@@ -48,11 +48,11 @@ const bertAppApi: BertAppApi = {
     getState() {
       return ipcRenderer.invoke('updater:getState') as Promise<UpdaterState>;
     },
-    checkForUpdates() {
-      return ipcRenderer.invoke('updater:checkForUpdates') as Promise<UpdaterState>;
+    checkForUpdates(jwt: string) {
+      return ipcRenderer.invoke('updater:checkForUpdates', { jwt }) as Promise<UpdaterState>;
     },
-    downloadUpdate() {
-      return ipcRenderer.invoke('updater:downloadUpdate') as Promise<UpdaterState>;
+    downloadUpdate(jwt: string) {
+      return ipcRenderer.invoke('updater:downloadUpdate', { jwt }) as Promise<UpdaterState>;
     },
     installUpdate() {
       return ipcRenderer.invoke('updater:installUpdate') as Promise<void>;

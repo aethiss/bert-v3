@@ -3,6 +3,8 @@ import { useIntl } from 'react-intl';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { showErrorToast } from '@renderer/lib/errorToast';
+import { useAppSelector } from '@renderer/store/hooks';
+import { selectJwt } from '@renderer/store/selectors/authSelectors';
 import {
   checkForUpdates,
   downloadUpdate,
@@ -45,6 +47,7 @@ function formatBytes(value: number | null): string | null {
 
 export function UpdateSettings() {
   const intl = useIntl();
+  const jwt = useAppSelector(selectJwt);
   const [state, setState] = useState<UpdaterState | null>(null);
   const [isChecking, setIsChecking] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
@@ -99,9 +102,15 @@ export function UpdateSettings() {
   }, [refreshState]);
 
   const handleCheckForUpdates = async (): Promise<void> => {
+    if (!jwt?.trim()) {
+      toast.error(intl.formatMessage({ id: 'common.error' }), {
+        description: intl.formatMessage({ id: 'updater.authRequired' })
+      });
+      return;
+    }
     setIsChecking(true);
     try {
-      const nextState = await checkForUpdates();
+      const nextState = await checkForUpdates(jwt);
       setState(nextState);
       if (nextState.phase === 'idle') {
         toast.success(intl.formatMessage({ id: 'updater.noUpdatesTitle' }), {
@@ -116,9 +125,15 @@ export function UpdateSettings() {
   };
 
   const handleDownloadUpdate = async (): Promise<void> => {
+    if (!jwt?.trim()) {
+      toast.error(intl.formatMessage({ id: 'common.error' }), {
+        description: intl.formatMessage({ id: 'updater.authRequired' })
+      });
+      return;
+    }
     setIsDownloading(true);
     try {
-      const nextState = await downloadUpdate();
+      const nextState = await downloadUpdate(jwt);
       setState(nextState);
     } catch (error) {
       showErrorToast(error);
@@ -247,7 +262,7 @@ export function UpdateSettings() {
         <Button
           className="server-btn server-start-btn"
           onClick={() => void handleCheckForUpdates()}
-          disabled={!state || !state.canCheck || isChecking || isDownloading || isInstalling}
+          disabled={!state || !jwt || !state.canCheck || isChecking || isDownloading || isInstalling}
         >
           {isChecking
             ? intl.formatMessage({ id: 'updater.checkingButton' })
@@ -257,7 +272,7 @@ export function UpdateSettings() {
         <Button
           className="server-btn server-start-btn"
           onClick={() => void handleDownloadUpdate()}
-          disabled={!state || !state.canDownload || isDownloading || isChecking || isInstalling}
+          disabled={!state || !jwt || !state.canDownload || isDownloading || isChecking || isInstalling}
         >
           {isDownloading
             ? intl.formatMessage({ id: 'updater.downloadingButton' })

@@ -265,6 +265,7 @@
   "table.uuid": "UUID",
   "updater.availableVersion": "Available version",
   "updater.availableVersionFallback": "No update detected",
+  "updater.authRequired": "You must be logged in online to check or download updates.",
   "updater.checkButton": "Check for updates",
   "updater.checkingButton": "Checking...",
   "updater.currentVersion": "Current version",

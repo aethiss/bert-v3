@@ -13,8 +13,12 @@ export function registerUpdaterIpc(updateService: UpdateService): void {
   ipcMain.removeHandler(CHANNEL_INSTALL_UPDATE);
 
   ipcMain.handle(CHANNEL_GET_STATE, async () => updateService.getState());
-  ipcMain.handle(CHANNEL_CHECK_FOR_UPDATES, async () => updateService.checkForUpdates());
-  ipcMain.handle(CHANNEL_DOWNLOAD_UPDATE, async () => updateService.downloadUpdate());
+  ipcMain.handle(CHANNEL_CHECK_FOR_UPDATES, async (_event, params: { jwt: string }) =>
+    updateService.checkForUpdates(params?.jwt ?? '')
+  );
+  ipcMain.handle(CHANNEL_DOWNLOAD_UPDATE, async (_event, params: { jwt: string }) =>
+    updateService.downloadUpdate(params?.jwt ?? '')
+  );
   ipcMain.handle(CHANNEL_INSTALL_UPDATE, async () => {
     await updateService.installUpdate();
   });
