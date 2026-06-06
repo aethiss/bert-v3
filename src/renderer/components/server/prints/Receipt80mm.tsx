@@ -71,14 +71,22 @@ export function Receipt80mm({ logoSrc, payload }: Props): ReactElement {
                 <span className="receipt-bold">{intl.formatMessage({ id: 'receipt.label.cycle' })}</span>{' '}
                 {cycle.cycleName || intl.formatMessage({ id: 'common.na' })}
               </div>
-              <div>
-                <span className="receipt-bold">{intl.formatMessage({ id: 'receipt.label.packageDescription' })}</span>{' '}
-                {cycle.assistanceType || intl.formatMessage({ id: 'common.na' })}
-              </div>
-              <div>
-                <span className="receipt-bold">{intl.formatMessage({ id: 'receipt.label.qty' })}</span>{' '}
-                {cycle.quantity || intl.formatMessage({ id: 'common.na' })}
-              </div>
+              {(cycle.commodities ?? []).length > 0 ? (
+                (cycle.commodities ?? []).map((commodity, commodityIndex) => (
+                  <div key={`${cycle.cycleName}-${index}-${commodityIndex}`} className="receipt-commodity-row">
+                    <span className="receipt-commodity-name">
+                      {(intl.locale.toLowerCase().startsWith('ar')
+                        ? commodity.arName || commodity.enName
+                        : commodity.enName || commodity.arName) || intl.formatMessage({ id: 'common.na' })}
+                    </span>
+                    <span className="receipt-commodity-qty">
+                      QTY {commodity.quantity || intl.formatMessage({ id: 'common.na' })}
+                    </span>
+                  </div>
+                ))
+              ) : (
+                <div>{intl.formatMessage({ id: 'receipt.noData' })}</div>
+              )}
               {index !== payload.cycles.length - 1 ? (
                 <div className="receipt-plus">++++++++++++++++++++++++++++++++++++++++++++++</div>
               ) : null}

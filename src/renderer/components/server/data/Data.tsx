@@ -14,15 +14,19 @@ type Props = {
   pendingDistributionCount: number;
 };
 
-function toCsvCell(value: unknown): string {
+function toWorksheetCell(value: unknown): string {
   if (value === null || value === undefined) {
     return '';
   }
-  const stringValue = String(value).replace(/"/g, '""');
-  return `"${stringValue}"`;
+  return String(value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&apos;');
 }
 
-function createDistributionCsv(rows: Awaited<ReturnType<typeof getDistributionQueue>>): string {
+function createDistributionExcelXml(rows: Awaited<ReturnType<typeof getDistributionQueue>>): string {
   const header = [
     'id',
     'familyUniqueCode',
@@ -38,8 +42,9 @@ function createDistributionCsv(rows: Awaited<ReturnType<typeof getDistributionQu
     'createdAt'
   ];
 
-  const lines = rows.map((row) =>
-    [
+  const allRows = [
+    header,
+    ...rows.map((row) => [
       row.id,
       row.familyUniqueCode,
       row.memberId,
@@ -52,16 +57,35 @@ function createDistributionCsv(rows: Awaited<ReturnType<typeof getDistributionQu
       row.notes,
       row.status,
       row.createdAt
-    ]
-      .map((value) => toCsvCell(value))
-      .join(',')
-  );
+    ])
+  ];
 
-  return [header.join(','), ...lines].join('\n');
+  const tableRows = allRows
+    .map(
+      (row) =>
+        `<Row>${row
+          .map((value) => `<Cell><Data ss:Type="String">${toWorksheetCell(value)}</Data></Cell>`)
+          .join('')}</Row>`
+    )
+    .join('');
+
+  return `<?xml version="1.0"?>
+<?mso-application progid="Excel.Sheet"?>
+<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"
+ xmlns:o="urn:schemas-microsoft-com:office:office"
+ xmlns:x="urn:schemas-microsoft-com:office:excel"
+ xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"
+ xmlns:html="http://www.w3.org/TR/REC-html40">
+  <Worksheet ss:Name="Distributions">
+    <Table>${tableRows}</Table>
+  </Worksheet>
+</Workbook>`;
 }
 
-function downloadCsv(filename: string, content: string): void {
-  const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' });
+function downloadExcel(filename: string, content: string): void {
+  const blob = new Blob([content], {
+    type: 'application/vnd.ms-excel;charset=utf-8;'
+  });
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement('a');
   anchor.href = url;
@@ -126,9 +150,9 @@ export function Data({ pendingDistributionCount }: Props) {
         return;
       }
 
-      const csv = createDistributionCsv(rows);
+      const workbookXml = createDistributionExcelXml(rows);
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-      downloadCsv(`distribution-report-${timestamp}.csv`, csv);
+      downloadExcel(`distribution-report-${timestamp}.xls`, workbookXml);
       toast.success(intl.formatMessage({ id: 'data.exportCompletedTitle' }), {
         description: intl.formatMessage(
           { id: 'data.exportCompletedDescription' },

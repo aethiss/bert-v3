@@ -301,8 +301,11 @@ export function Distribution({ route, onNavigate, session }: ClientDistributionP
           ? [
               {
                 cycleName: selectedCycle.cycleName,
-                assistanceType: selectedCycle.assistanceType,
-                quantity: selectedCycle.quantity
+                commodities: (selectedCycle.foodCommodities ?? []).map((commodity) => ({
+                  enName: commodity.en_name ?? '',
+                  arName: commodity.ar_name ?? '',
+                  quantity: String(commodity.quantity ?? intl.formatMessage({ id: 'common.na' }))
+                }))
               }
             ]
           : [],

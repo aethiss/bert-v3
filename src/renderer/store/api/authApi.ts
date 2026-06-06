@@ -12,6 +12,12 @@ function toPersistedUserProfile(
   if (!user || !user.email) {
     throw new Error('User info response does not include a valid user.');
   }
+  if ((user.accessLevel ?? '').trim().toUpperCase() !== 'FDP') {
+    throw new Error('Access denied: only users with accessLevel "FDP" can login.');
+  }
+  if (!(user.fdp ?? '').trim()) {
+    throw new Error('Access denied: FDP user profile is missing a valid fdp code.');
+  }
 
   return {
     id: typeof user.id === 'number' ? user.id : null,

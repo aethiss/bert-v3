@@ -41,7 +41,9 @@ function resolveEligibleMembersUrl(fdpCode: string): string {
     '/api/v1/active-cycles-householdsv5/';
 
   const normalizedPath = endpointPath.endsWith('/') ? endpointPath : `${endpointPath}/`;
-  return new URL(`${normalizedPath}${fdpCode}`, apiBase).toString();
+  const url = new URL(`${normalizedPath}${fdpCode}`, apiBase);
+  url.searchParams.set('include_distribution_reports', 'true');
+  return url.toString();
 }
 
 function resolveBulkDistributionPushUrl(): string {
@@ -164,7 +166,6 @@ export function registerEligibleDataIpc(
             appSignature: row.appSignature,
             note: row.notes ?? ''
           }));
-
           const startedAt = Date.now();
           const response = await fetch(endpointUrl, {
             method: 'POST',

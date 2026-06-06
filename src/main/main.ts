@@ -47,6 +47,7 @@ async function createMainWindow(): Promise<void> {
     minWidth: 960,
     minHeight: 600,
     show: false,
+    autoHideMenuBar: true,
     ...(appIconPath ? { icon: appIconPath } : {}),
     webPreferences: {
       preload: path.join(__dirname, '../preload/index.js'),
@@ -54,6 +55,11 @@ async function createMainWindow(): Promise<void> {
       nodeIntegration: false
     }
   });
+
+  if (process.platform !== 'darwin') {
+    window.setMenuBarVisibility(false);
+    window.setMenu(null);
+  }
 
   window.once('ready-to-show', () => window.show());
 

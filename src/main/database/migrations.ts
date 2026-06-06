@@ -150,6 +150,31 @@ const ELIGIBLE_CACHE_SCHEMA: string[] = [
     ON distribution_list(cycle_code);
   `,
   `
+  CREATE TABLE IF NOT EXISTS synced_distribution_history (
+    family_unique_code INTEGER NOT NULL,
+    cycle_code INTEGER NOT NULL,
+    distribution_time TEXT,
+    app_signature TEXT,
+    collected_by_document TEXT,
+    collected_by_first_name TEXT,
+    collected_by_last_name TEXT,
+    collected_by_father_name TEXT,
+    notes TEXT,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY(family_unique_code, cycle_code),
+    FOREIGN KEY(family_unique_code) REFERENCES families(family_unique_code) ON DELETE CASCADE,
+    FOREIGN KEY(cycle_code) REFERENCES cycles(cycle_code) ON DELETE CASCADE
+  );
+  `,
+  `
+  CREATE INDEX IF NOT EXISTS idx_synced_distribution_history_family
+    ON synced_distribution_history(family_unique_code);
+  `,
+  `
+  CREATE INDEX IF NOT EXISTS idx_synced_distribution_history_cycle
+    ON synced_distribution_history(cycle_code);
+  `,
+  `
   CREATE TABLE IF NOT EXISTS cycle_food_commodities (
     cycle_code INTEGER NOT NULL,
     commodity_id INTEGER NOT NULL,
@@ -199,6 +224,29 @@ async function ensureDistributionQueueSchema(db: Database): Promise<void> {
   const hasQuantity = columns.some((column) => column.name === 'quantity');
   if (!hasQuantity) {
     await db.exec('ALTER TABLE distribution_queue ADD COLUMN quantity INTEGER NOT NULL DEFAULT 1');
+  }
+}
+
+async function ensureSyncedDistributionHistorySchema(db: Database): Promise<void> {
+  const columns = await db.all<Array<{ name: string }>>('PRAGMA table_info(synced_distribution_history)');
+  if (columns.length === 0) {
+    return;
+  }
+  const hasCollectedByDocument = columns.some((column) => column.name === 'collected_by_document');
+  if (!hasCollectedByDocument) {
+    await db.exec('ALTER TABLE synced_distribution_history ADD COLUMN collected_by_document TEXT');
+  }
+  const hasCollectedByFirstName = columns.some((column) => column.name === 'collected_by_first_name');
+  if (!hasCollectedByFirstName) {
+    await db.exec('ALTER TABLE synced_distribution_history ADD COLUMN collected_by_first_name TEXT');
+  }
+  const hasCollectedByLastName = columns.some((column) => column.name === 'collected_by_last_name');
+  if (!hasCollectedByLastName) {
+    await db.exec('ALTER TABLE synced_distribution_history ADD COLUMN collected_by_last_name TEXT');
+  }
+  const hasCollectedByFatherName = columns.some((column) => column.name === 'collected_by_father_name');
+  if (!hasCollectedByFatherName) {
+    await db.exec('ALTER TABLE synced_distribution_history ADD COLUMN collected_by_father_name TEXT');
   }
 }
 
@@ -274,6 +322,7 @@ export async function runMigrations(db: Database): Promise<void> {
     await ensureUserTableSchema(db);
     await ensureDistributionQueueSchema(db);
     await ensureEligibleCacheSchema(db);
+    await ensureSyncedDistributionHistorySchema(db);
     await db.exec('COMMIT');
   } catch (error) {
     await db.exec('ROLLBACK');

@@ -85,11 +85,6 @@ export function TopNavigation({
         </div>
         {isConnected && alias ? (
           <>
-            <img
-              className="server-user-avatar"
-              src="https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=64&h=64&fit=crop&crop=face"
-              alt={intl.formatMessage({ id: 'nav.client.avatarAlt' })}
-            />
             <span className="server-user-email">{alias}</span>
           </>
         ) : null}

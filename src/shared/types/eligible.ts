@@ -127,6 +127,9 @@ export interface DistributionActiveCycle {
 export interface DistributionHouseholdMember {
   memberId: number;
   fullName: string;
+  firstName: string | null;
+  lastName: string | null;
+  fatherName: string | null;
   documentNumber: string | null;
   age: number | null;
   role: string | null;
@@ -170,6 +173,10 @@ export interface FamilyDistributionHistoryItem {
   id: number;
   familyUniqueCode: number;
   memberId: number;
+  collectedByDocument: string | null;
+  collectedByFirstName: string | null;
+  collectedByLastName: string | null;
+  collectedByFatherName: string | null;
   cycleCode: number;
   cycleName: string;
   quantity: number;

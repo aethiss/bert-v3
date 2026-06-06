@@ -85,6 +85,11 @@ export function App() {
           await refreshEligibleSummary();
           return;
         }
+        if (!(persistedUser.fdp ?? '').trim()) {
+          await clearPersistedUser();
+          await refreshEligibleSummary();
+          return;
+        }
 
         dispatch(restoreOfflineSession(persistedUser));
         await refreshEligibleSummary();
@@ -364,7 +369,7 @@ export function App() {
   }, [dispatch, refreshEligibleSummary]);
 
   const synchronizeEligibleData = useCallback(async () => {
-    const fdpCode = (currentUser?.fdp ?? currentUser?.fieldOffice ?? '').trim();
+    const fdpCode = (currentUser?.fdp ?? '').trim();
     if (!fdpCode) {
       throw new Error('Missing FDP code for synchronization.');
     }
@@ -387,7 +392,7 @@ export function App() {
       syncRequest.unsubscribe();
       setIsSynchronizing(false);
     }
-  }, [currentUser?.fdp, currentUser?.fieldOffice, dispatch, jwt, refreshEligibleSummary]);
+  }, [currentUser?.fdp, dispatch, jwt, refreshEligibleSummary]);
 
   const handleServerAuthAction = useCallback(async () => {
     try {

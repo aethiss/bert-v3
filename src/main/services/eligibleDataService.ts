@@ -1,4 +1,5 @@
 import type { Database } from 'sqlite';
+import { createHash } from 'node:crypto';
 import type {
   ClientDistributionInput,
   ClientDistributionHistoryInput,
@@ -16,6 +17,7 @@ import type {
   DistributionSearchMember,
   DistributionSearchResult,
   EligibleCycleSummary,
+  EligibleMemberApiModel,
   EligibleMembersApiResponse,
   EligibleOverviewSummary,
   LocalDistributionEventInput
@@ -223,6 +225,7 @@ interface DistributionHouseholdMemberRow {
   memberId: number;
   firstName: string | null;
   lastName: string | null;
+  fatherName: string | null;
   documentNumber: string | null;
   dateOfBirth: string | null;
   role: string | null;
@@ -286,12 +289,68 @@ function normalizeQuantity(value: unknown): number {
   return Math.max(1, Math.round(parsed));
 }
 
+function buildDistributionAppSignature(input: {
+  familyUniqueCode: number;
+  memberId: number;
+  cycleCode: number;
+  mainOperator: number;
+  mainOperatorFDP: string;
+  subOperator: string | null;
+  quantity: number;
+  notes: string | null;
+  distributionTimeIso: string;
+}): string {
+  const source = JSON.stringify({
+    familyUniqueCode: input.familyUniqueCode,
+    memberID: input.memberId,
+    distributionTime: input.distributionTimeIso,
+    cycleCode: input.cycleCode,
+    mainOperator: input.mainOperator,
+    subOperator: input.subOperator ?? '',
+    quantity: input.quantity,
+    note: input.notes ?? '',
+    mainOperatorFDP: input.mainOperatorFDP
+  });
+
+  return createHash('sha256').update(source).digest('hex');
+}
+
 function normalizeFamilyUniqueCode(family: EligibleFamilyApiModel): number | null {
   return toSafeInteger(family.FamilyUniqueCode);
 }
 
 function normalizeCommodityId(commodity: EligibleFoodCommodityApiModel): number | null {
   return toSafeInteger(commodity.id);
+}
+
+function getDistributionHistoryCycleCode(entry: Record<string, unknown>): number | null {
+  return toSafeInteger(entry.cycleCode);
+}
+
+function getDistributionHistoryFamilyUniqueCode(
+  entry: Record<string, unknown>,
+  fallbackFamilyUniqueCode: number
+): number | null {
+  return toSafeInteger(entry.hhid) ?? fallbackFamilyUniqueCode;
+}
+
+function getDistributionHistoryCollectedByDocument(entry: Record<string, unknown>): string | null {
+  return asNullableText(entry.collectedByNationalId);
+}
+
+function findHistoryCollectorMember(
+  family: EligibleFamilyApiModel,
+  historyEntry: Record<string, unknown>
+): EligibleMemberApiModel | null {
+  const collectedByDocument = getDistributionHistoryCollectedByDocument(historyEntry);
+  if (!collectedByDocument?.trim()) {
+    return null;
+  }
+  return (
+    (family.members ?? []).find(
+      (member) => asText(member.documentNumber).trim().toLowerCase() === collectedByDocument.trim().toLowerCase()
+    ) ?? null
+  );
 }
 
 export function createEligibleDataService(db: Database): EligibleDataService {
@@ -328,6 +387,7 @@ export function createEligibleDataService(db: Database): EligibleDataService {
     await db.exec('BEGIN TRANSACTION');
     try {
       await db.run('DELETE FROM cycle_food_commodities');
+      await db.run('DELETE FROM synced_distribution_history');
       await db.run('DELETE FROM distribution_list');
       await db.run('DELETE FROM members');
       await db.run('DELETE FROM families');
@@ -346,6 +406,7 @@ export function createEligibleDataService(db: Database): EligibleDataService {
     await db.exec('BEGIN TRANSACTION');
     try {
       await db.run('DELETE FROM cycle_food_commodities');
+      await db.run('DELETE FROM synced_distribution_history');
       await db.run('DELETE FROM distribution_list');
       await db.run('DELETE FROM members');
       await db.run('DELETE FROM families');
@@ -504,6 +565,77 @@ export function createEligibleDataService(db: Database): EligibleDataService {
             familyUniqueCode,
             cycleCode,
             asText(familyCycle.quantity, '1')
+          );
+        }
+
+        for (const historyEntry of family.distributionHistory ?? []) {
+          const cycleCode = getDistributionHistoryCycleCode(historyEntry);
+          const historyFamilyUniqueCode = getDistributionHistoryFamilyUniqueCode(
+            historyEntry,
+            familyUniqueCode
+          );
+          if (cycleCode === null || historyFamilyUniqueCode === null) {
+            continue;
+          }
+
+          if (!validCycleCodes.has(cycleCode)) {
+            // Preserve history entries for cycles no longer active in payload.
+            await db.run(
+              `
+              INSERT INTO cycles (
+                cycle_code, cycle_id, cycle_name, assistance_package_name, start_date, end_date,
+                cycle_note, cooperating_partner, field_distribution_point, household_count
+              )
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+              ON CONFLICT(cycle_code) DO NOTHING
+              `,
+              cycleCode,
+              `history_${cycleCode}`,
+              `Cycle ${cycleCode}`,
+              '',
+              asText(historyEntry.timestamp, '1970-01-01T00:00:00Z'),
+              asText(historyEntry.timestamp, '1970-01-01T00:00:00Z'),
+              null,
+              null,
+              null,
+              0
+            );
+            validCycleCodes.add(cycleCode);
+          }
+
+          await db.run(
+            `
+            INSERT INTO synced_distribution_history (
+              family_unique_code,
+              cycle_code,
+              distribution_time,
+              app_signature,
+              collected_by_document,
+              collected_by_first_name,
+              collected_by_last_name,
+              collected_by_father_name,
+              notes
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(family_unique_code, cycle_code) DO UPDATE SET
+              distribution_time = excluded.distribution_time,
+              app_signature = excluded.app_signature,
+              collected_by_document = excluded.collected_by_document,
+              collected_by_first_name = excluded.collected_by_first_name,
+              collected_by_last_name = excluded.collected_by_last_name,
+              collected_by_father_name = excluded.collected_by_father_name,
+              notes = excluded.notes,
+              updated_at = CURRENT_TIMESTAMP
+            `,
+            historyFamilyUniqueCode,
+            cycleCode,
+            asNullableText(historyEntry.timestamp),
+            asNullableText(historyEntry.signature),
+            getDistributionHistoryCollectedByDocument(historyEntry),
+            asNullableText(findHistoryCollectorMember(family, historyEntry)?.firstName),
+            asNullableText(findHistoryCollectorMember(family, historyEntry)?.lastName),
+            asNullableText(findHistoryCollectorMember(family, historyEntry)?.fatherName),
+            asNullableText(historyEntry.notes)
           );
         }
 
@@ -728,6 +860,7 @@ export function createEligibleDataService(db: Database): EligibleDataService {
         member_id as memberId,
         first_name as firstName,
         last_name as lastName,
+        father_name as fatherName,
         document_number as documentNumber,
         date_of_birth as dateOfBirth,
         role as role
@@ -754,6 +887,16 @@ export function createEligibleDataService(db: Database): EligibleDataService {
             FROM distribution_queue dq
             WHERE dq.family_unique_code = dl.family_unique_code
               AND dq.cycle_code = dl.cycle_code
+          ) OR EXISTS (
+            SELECT 1
+            FROM client_distribution_history cdh
+            WHERE cdh.family_unique_code = dl.family_unique_code
+              AND cdh.cycle_code = dl.cycle_code
+          ) OR EXISTS (
+            SELECT 1
+            FROM synced_distribution_history sdh
+            WHERE sdh.family_unique_code = dl.family_unique_code
+              AND sdh.cycle_code = dl.cycle_code
           ) THEN 1
           ELSE 0
         END as isDistributed
@@ -771,6 +914,7 @@ export function createEligibleDataService(db: Database): EligibleDataService {
         m.member_id as memberId,
         m.first_name as firstName,
         m.last_name as lastName,
+        m.father_name as fatherName,
         m.document_number as documentNumber,
         m.date_of_birth as dateOfBirth,
         m.role as role
@@ -847,6 +991,9 @@ export function createEligibleDataService(db: Database): EligibleDataService {
     const members: DistributionHouseholdMember[] = memberRows.map((row) => ({
       memberId: row.memberId,
       fullName: toDisplayName(row.firstName, row.lastName),
+      firstName: row.firstName,
+      lastName: row.lastName,
+      fatherName: row.fatherName,
       documentNumber: row.documentNumber,
       age: computeAge(row.dateOfBirth),
       role: row.role
@@ -899,6 +1046,20 @@ export function createEligibleDataService(db: Database): EligibleDataService {
       );
     }
 
+    const normalizedQuantity = normalizeQuantity(payload.quantity);
+    const distributionTimeIso = new Date().toISOString();
+    const appSignature = buildDistributionAppSignature({
+      familyUniqueCode: payload.familyUniqueCode,
+      memberId: payload.memberId,
+      cycleCode: payload.cycleCode,
+      mainOperator: payload.mainOperator,
+      mainOperatorFDP: payload.mainOperatorFDP,
+      subOperator: payload.subOperator,
+      quantity: normalizedQuantity,
+      notes: payload.notes,
+      distributionTimeIso
+    });
+
     let result: { lastID?: number } = {};
     try {
       result = await db.run(
@@ -923,8 +1084,8 @@ export function createEligibleDataService(db: Database): EligibleDataService {
         payload.mainOperator,
         payload.mainOperatorFDP,
         payload.subOperator,
-        normalizeQuantity(payload.quantity),
-        payload.appSignature,
+        normalizedQuantity,
+        appSignature,
         payload.notes
       );
     } catch (error) {
@@ -976,14 +1137,19 @@ export function createEligibleDataService(db: Database): EligibleDataService {
     const cycles = await db.all<EligibleCycleSummary[]>(
       `
       SELECT
-        cycle_code as cycleCode,
-        cycle_name as cycleName,
-        assistance_package_name as assistancePackageName,
-        start_date as startDate,
-        end_date as endDate,
-        household_count as householdCount
-      FROM cycles
-      ORDER BY cycle_code DESC
+        c.cycle_code as cycleCode,
+        c.cycle_name as cycleName,
+        c.assistance_package_name as assistancePackageName,
+        c.start_date as startDate,
+        c.end_date as endDate,
+        c.household_count as householdCount
+      FROM cycles c
+      WHERE EXISTS (
+        SELECT 1
+        FROM distribution_list dl
+        WHERE dl.cycle_code = c.cycle_code
+      )
+      ORDER BY c.cycle_code DESC
       LIMIT 2
       `
     );
@@ -1053,6 +1219,10 @@ export function createEligibleDataService(db: Database): EligibleDataService {
         id: number;
         familyUniqueCode: number;
         memberId: number;
+        collectedByDocument: string | null;
+        collectedByFirstName: string | null;
+        collectedByLastName: string | null;
+        collectedByFatherName: string | null;
         cycleCode: number;
         cycleName: string | null;
         quantity: number;
@@ -1065,22 +1235,71 @@ export function createEligibleDataService(db: Database): EligibleDataService {
     >(
       `
       SELECT
-        dq.id as id,
-        dq.family_unique_code as familyUniqueCode,
-        dq.member_id as memberId,
-        dq.cycle_code as cycleCode,
-        c.cycle_name as cycleName,
-        dq.quantity as quantity,
-        dq.sub_operator as subOperator,
-        dq.status as status,
-        dq.app_signature as appSignature,
-        dq.notes as notes,
-        dq.created_at as createdAt
-      FROM distribution_queue dq
-      LEFT JOIN cycles c ON c.cycle_code = dq.cycle_code
-      WHERE dq.family_unique_code = ?
-      ORDER BY dq.created_at DESC, dq.id DESC
+        history.id as id,
+        history.familyUniqueCode as familyUniqueCode,
+        history.memberId as memberId,
+        history.collectedByDocument as collectedByDocument,
+        history.collectedByFirstName as collectedByFirstName,
+        history.collectedByLastName as collectedByLastName,
+        history.collectedByFatherName as collectedByFatherName,
+        history.cycleCode as cycleCode,
+        history.cycleName as cycleName,
+        history.quantity as quantity,
+        history.subOperator as subOperator,
+        history.status as status,
+        history.appSignature as appSignature,
+        history.notes as notes,
+        history.createdAt as createdAt
+      FROM (
+        SELECT
+          dq.id as id,
+          dq.family_unique_code as familyUniqueCode,
+          dq.member_id as memberId,
+          m.document_number as collectedByDocument,
+          m.first_name as collectedByFirstName,
+          m.last_name as collectedByLastName,
+          m.father_name as collectedByFatherName,
+          dq.cycle_code as cycleCode,
+          c.cycle_name as cycleName,
+          dq.quantity as quantity,
+          dq.sub_operator as subOperator,
+          dq.status as status,
+          dq.app_signature as appSignature,
+          dq.notes as notes,
+          dq.created_at as createdAt
+        FROM distribution_queue dq
+        LEFT JOIN cycles c ON c.cycle_code = dq.cycle_code
+        LEFT JOIN members m ON m.member_id = dq.member_id
+        WHERE dq.family_unique_code = ?
+
+        UNION ALL
+
+        SELECT
+          -1 as id,
+          sdh.family_unique_code as familyUniqueCode,
+          COALESCE(m.member_id, 0) as memberId,
+          sdh.collected_by_document as collectedByDocument,
+          COALESCE(m.first_name, sdh.collected_by_first_name) as collectedByFirstName,
+          COALESCE(m.last_name, sdh.collected_by_last_name) as collectedByLastName,
+          COALESCE(m.father_name, sdh.collected_by_father_name) as collectedByFatherName,
+          sdh.cycle_code as cycleCode,
+          c.cycle_name as cycleName,
+          1 as quantity,
+          NULL as subOperator,
+          'synced_remote' as status,
+          sdh.app_signature as appSignature,
+          sdh.notes as notes,
+          COALESCE(sdh.distribution_time, sdh.updated_at) as createdAt
+        FROM synced_distribution_history sdh
+        LEFT JOIN cycles c ON c.cycle_code = sdh.cycle_code
+        LEFT JOIN members m
+          ON m.family_unique_code = sdh.family_unique_code
+         AND LOWER(TRIM(m.document_number)) = LOWER(TRIM(sdh.collected_by_document))
+        WHERE sdh.family_unique_code = ?
+      ) history
+      ORDER BY history.createdAt DESC, history.id DESC
       `,
+      familyUniqueCode,
       familyUniqueCode
     );
 
@@ -1088,6 +1307,10 @@ export function createEligibleDataService(db: Database): EligibleDataService {
       id: asNumber(row.id),
       familyUniqueCode: asNumber(row.familyUniqueCode),
       memberId: asNumber(row.memberId),
+      collectedByDocument: asNullableText(row.collectedByDocument),
+      collectedByFirstName: asNullableText(row.collectedByFirstName),
+      collectedByLastName: asNullableText(row.collectedByLastName),
+      collectedByFatherName: asNullableText(row.collectedByFatherName),
       cycleCode: asNumber(row.cycleCode),
       cycleName: asText(row.cycleName, `Cycle ${row.cycleCode}`),
       quantity: normalizeQuantity(row.quantity),

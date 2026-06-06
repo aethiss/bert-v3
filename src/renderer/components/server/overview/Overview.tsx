@@ -1,4 +1,3 @@
-import { House, UsersRound } from 'lucide-react';
 import { useIntl } from 'react-intl';
 import { Button } from '@ui/components/ui/button';
 import type { EligibleOverviewSummary } from '@shared/types/eligible';
@@ -29,6 +28,24 @@ function formatDate(value: string, locale: string): string {
   }).format(date);
 }
 
+function formatDateTime(value: string, locale: string): string {
+  if (!value) {
+    return '';
+  }
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return '';
+  }
+
+  return new Intl.DateTimeFormat(locale, {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  }).format(date);
+}
+
 export function Overview({
   hasEligibleData,
   overviewSummary,
@@ -39,10 +56,6 @@ export function Overview({
 }: OverviewProps) {
   const intl = useIntl();
   const cycles = overviewSummary.cycles;
-  const firstCycle = cycles[0];
-  const secondCycle = cycles[1];
-  const firstCycleTag = (firstCycle?.assistancePackageName ?? '').slice(0, 4).toUpperCase();
-  const secondCycleTag = (secondCycle?.assistancePackageName ?? '').slice(0, 4).toUpperCase();
 
   return (
     <section className="server-content-block">
@@ -53,12 +66,17 @@ export function Overview({
           <span className="overview-sync-meta">
             {intl.formatMessage({ id: 'overview.server.lastSync' })}:{' '}
             {overviewSummary.lastSynchronizedAt
-              ? formatDate(overviewSummary.lastSynchronizedAt, intl.locale)
+              ? formatDateTime(overviewSummary.lastSynchronizedAt, intl.locale)
               : intl.formatMessage({ id: 'overview.server.never' })}
             {' • '}
             {isOnline
               ? intl.formatMessage({ id: 'status.online' })
               : intl.formatMessage({ id: 'status.offline' })}
+          </span>
+          <span className="overview-sync-meta overview-sync-stats">
+            {intl.formatMessage({ id: 'overview.server.members' })}: {overviewSummary.totalMembers}
+            {' • '}
+            {intl.formatMessage({ id: 'overview.server.households' })}: {overviewSummary.totalHouseholds}
           </span>
         </p>
         <Button
@@ -74,54 +92,28 @@ export function Overview({
       <hr className="server-divider" />
 
       {hasEligibleData ? (
-        <div className="overview-cards-grid overview-cards-grid-with-sync">
-          <article className="overview-card">
-            <div className="overview-card-head">
-              <p>
-                {firstCycle?.cycleName ??
-                  firstCycle?.assistancePackageName ??
-                  intl.formatMessage({ id: 'overview.server.cycleFallback' }, { index: 1 })}
-              </p>
-              {firstCycleTag ? <span className="overview-chip">{firstCycleTag}</span> : null}
-            </div>
-            <p className="overview-card-value">{firstCycle?.householdCount ?? 0}</p>
-            <p className="overview-card-sub">
-              {formatDate(firstCycle?.startDate ?? '', intl.locale)} -{' '}
-              {formatDate(firstCycle?.endDate ?? '', intl.locale)}
-            </p>
-          </article>
-
-          <article className="overview-card">
-            <div className="overview-card-head">
-              <p>
-                {secondCycle?.cycleName ??
-                  secondCycle?.assistancePackageName ??
-                  intl.formatMessage({ id: 'overview.server.cycleFallback' }, { index: 2 })}
-              </p>
-              {secondCycleTag ? <span className="overview-chip">{secondCycleTag}</span> : null}
-            </div>
-            <p className="overview-card-value">{secondCycle?.householdCount ?? 0}</p>
-            <p className="overview-card-sub">
-              {formatDate(secondCycle?.startDate ?? '', intl.locale)} -{' '}
-              {formatDate(secondCycle?.endDate ?? '', intl.locale)}
-            </p>
-          </article>
-
-          <article className="overview-card">
-            <div className="overview-card-head">
-              <p>{intl.formatMessage({ id: 'overview.server.members' })}</p>
-              <UsersRound size={16} />
-            </div>
-            <p className="overview-card-value">{overviewSummary.totalMembers}</p>
-          </article>
-
-          <article className="overview-card">
-            <div className="overview-card-head">
-              <p>{intl.formatMessage({ id: 'overview.server.households' })}</p>
-              <House size={16} />
-            </div>
-            <p className="overview-card-value">{overviewSummary.totalHouseholds}</p>
-          </article>
+        <div className="overview-cycles-list">
+          {cycles.map((cycle, index) => (
+            <article className="overview-cycle-row" key={cycle.cycleCode}>
+              <div className="overview-cycle-main">
+                <p className="overview-cycle-title">
+                  {cycle.cycleName ??
+                    cycle.assistancePackageName ??
+                    intl.formatMessage({ id: 'overview.server.cycleFallback' }, { index: index + 1 })}
+                </p>
+                <p className="overview-cycle-total">
+                  {intl.formatMessage({ id: 'overview.server.totalMemberLabel' })} {cycle.householdCount ?? 0}
+                </p>
+                <p className="overview-cycle-date">
+                  {formatDate(cycle.startDate ?? '', intl.locale)} -{' '}
+                  {formatDate(cycle.endDate ?? '', intl.locale)}
+                </p>
+              </div>
+              <span className="overview-cycle-tag">
+                {intl.formatMessage({ id: 'overview.server.activeCycleTag' })}
+              </span>
+            </article>
+          ))}
         </div>
       ) : null}
     </section>

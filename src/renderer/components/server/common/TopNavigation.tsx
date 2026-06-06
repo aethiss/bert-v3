@@ -96,11 +96,6 @@ export function TopNavigation({
               : intl.formatMessage({ id: 'status.serverOff' })}
           </span>
         </div>
-        <img
-          className="server-user-avatar"
-          src="https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=64&h=64&fit=crop&crop=face"
-          alt={intl.formatMessage({ id: 'nav.server.avatarAlt' })}
-        />
         <span className="server-user-email">{userEmail}</span>
         <Button className="server-auth-btn" onClick={onAuthAction}>
           {authActionLabel === 'Logout'

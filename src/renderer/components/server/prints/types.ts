@@ -1,9 +1,14 @@
 import type { PrintFormat } from '@shared/types/printConfig';
 
+export interface ReceiptCommodityRow {
+  enName: string;
+  arName: string;
+  quantity: string;
+}
+
 export interface ReceiptCycleRow {
   cycleName: string;
-  assistanceType: string;
-  quantity: string;
+  commodities: ReceiptCommodityRow[];
 }
 
 export interface ReceiptPayload {
