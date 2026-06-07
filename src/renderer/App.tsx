@@ -41,6 +41,8 @@ import {
 } from '@renderer/store/selectors/eligibleSelectors';
 import { showErrorToast } from '@renderer/lib/errorToast';
 import { isRtkLikeError, toErrorMessage } from '@renderer/lib/errorMessage';
+import { isAuthExpiredError } from '@renderer/lib/authExpiry';
+import { toast } from 'sonner';
 import {
   getAppVersion,
   getLanguage,
@@ -51,7 +53,8 @@ import {
 } from '@renderer/services/configService';
 import { AppUpdateNotifications } from '@renderer/components/shared/AppUpdateNotifications';
 import { LocaleContext } from '@renderer/i18n/localeContext';
-import { MESSAGES_BY_LOCALE } from '@renderer/i18n/messages';
+import { MESSAGES_BY_LOCALE, getUiMessage } from '@renderer/i18n/messages';
+import { checkForUpdatesAfterLogin } from '@renderer/services/updaterService';
 
 export function App() {
   const dispatch = useAppDispatch();
@@ -365,6 +368,7 @@ export function App() {
         user: profile
       })
     );
+    void checkForUpdatesAfterLogin(jwt);
     await refreshEligibleSummary();
   }, [dispatch, refreshEligibleSummary]);
 
@@ -394,11 +398,37 @@ export function App() {
     }
   }, [currentUser?.fdp, dispatch, jwt, refreshEligibleSummary]);
 
+  const invalidateAuthSession = useCallback(async () => {
+    await clearPersistedUser();
+    dispatch(clearAuthSession());
+  }, [dispatch]);
+
+  const handleSynchronize = useCallback(async () => {
+    try {
+      await synchronizeEligibleData();
+    } catch (error) {
+      if (isAuthExpiredError(error)) {
+        await invalidateAuthSession();
+        toast.error(getUiMessage('data.pushAuthExpiredTitle', 'Login required again'), {
+          description: getUiMessage(
+            'data.pushAuthExpiredDescription',
+            'Your login session expired. Please log in again before using Push Distribution.'
+          )
+        });
+        return;
+      }
+
+      console.error('[eligible] Unable to synchronize data', error);
+      if (!isRtkLikeError(error)) {
+        showErrorToast(toErrorMessage(error));
+      }
+    }
+  }, [invalidateAuthSession, synchronizeEligibleData]);
+
   const handleServerAuthAction = useCallback(async () => {
     try {
       if (isOnline) {
-        await clearPersistedUser();
-        dispatch(clearAuthSession());
+        await invalidateAuthSession();
         return;
       }
 
@@ -409,7 +439,7 @@ export function App() {
         showErrorToast(toErrorMessage(error));
       }
     }
-  }, [dispatch, isOnline, runOnlineLoginFlow]);
+  }, [invalidateAuthSession, isOnline, runOnlineLoginFlow]);
 
   const appContent = useMemo(() => {
     if (isHydratingAuth || isHydratingLocale || installerModeSetup.isLoading) {
@@ -461,15 +491,10 @@ export function App() {
         isSynchronizing={isSynchronizing}
         isSynchronizeDisabled={!isOnline || eligibleOverviewSummary.pendingDistributionCount > 0}
         onSynchronize={() => {
-          void (async () => {
-            try {
-              await synchronizeEligibleData();
-            } catch (error) {
-              if (!isRtkLikeError(error)) {
-                showErrorToast(toErrorMessage(error));
-              }
-            }
-          })();
+          void handleSynchronize();
+        }}
+        onAuthExpired={() => {
+          void invalidateAuthSession();
         }}
         pendingDistributionCount={eligibleOverviewSummary.pendingDistributionCount}
         userEmail={currentUser?.email ?? ''}
@@ -496,8 +521,10 @@ export function App() {
     isLocalServerRunning,
     isOnline,
     isSynchronizing,
+    invalidateAuthSession,
     navigateServer,
     route,
+    handleSynchronize,
     synchronizeEligibleData
   ]);
 

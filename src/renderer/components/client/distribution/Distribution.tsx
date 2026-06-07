@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from 'react';
-import { ExternalLink, ScanLine, Search } from 'lucide-react';
+import { Fragment, useEffect, useRef, useState } from 'react';
+import { ChevronDown, ChevronRight, ExternalLink, Printer, ScanLine, Search } from 'lucide-react';
 import { useIntl } from 'react-intl';
 import { toast } from 'sonner';
 import { Button } from '@ui/components/ui/button';
@@ -7,7 +7,11 @@ import { Input } from '@/components/ui/input';
 import type {
   ClientRouteComponentProps
 } from '@renderer/components/client/types';
-import type { DistributionDetailData, DistributionSearchResult } from '@shared/types/eligible';
+import type {
+  DistributionDetailData,
+  DistributionSearchResult,
+  ClientDistributionHistoryItem
+} from '@shared/types/eligible';
 import { parseDocumentIdFromPdf417Payload } from '@shared/types/scanner';
 import type { ClientSession } from '@renderer/services/clientServerService';
 import {
@@ -15,26 +19,27 @@ import {
   saveDistributionOnLocalServer,
   searchMemberOnLocalServer
 } from '@renderer/services/clientServerService';
-import {
-  saveClientDistributionHistory
-} from '@renderer/services/eligibleDataService';
-import { getPrintSettings } from '@renderer/services/configService';
+import { getClientDistributionHistory } from '@renderer/services/eligibleDataService';
+import { getDeviceMacAddress, getPrintSettings } from '@renderer/services/configService';
 import { showErrorToast } from '@renderer/lib/errorToast';
 import { DistributionPrintPreview } from '@renderer/components/server/prints/DistributionPrintPreview';
-import { hideMiddleNumbers } from '@renderer/components/server/prints/receiptHelpers';
 import type { ReceiptPayload } from '@renderer/components/server/prints/types';
+import { buildReceiptPayload } from '@renderer/components/server/prints/receiptBuilders';
 
 interface ClientDistributionProps extends ClientRouteComponentProps {
   session: ClientSession | null;
 }
 
-function isPrincipleRole(role: string | null): boolean {
-  const normalized = (role ?? '').trim().toLowerCase();
-  return normalized === 'principle' || normalized === 'principal';
-}
-
 function asAgeLabel(age: number | null, fallback: string): string {
   return typeof age === 'number' ? String(age) : fallback;
+}
+
+function isMemberEligibleForDistribution(age: number | null): boolean {
+  return typeof age !== 'number' || age > 15;
+}
+
+function hasUsableDocumentId(documentNumber: string | null): boolean {
+  return Boolean(documentNumber?.trim());
 }
 
 export function Distribution({ route, onNavigate, session }: ClientDistributionProps) {
@@ -46,7 +51,7 @@ export function Distribution({ route, onNavigate, session }: ClientDistributionP
   const [isSearching, setIsSearching] = useState(false);
   const [isLoadingDetail, setIsLoadingDetail] = useState(false);
   const [detail, setDetail] = useState<DistributionDetailData | null>(null);
-  const [selectedCycleCode, setSelectedCycleCode] = useState<number | null>(null);
+  const [selectedCycleCodes, setSelectedCycleCodes] = useState<number[]>([]);
   const [selectedMemberId, setSelectedMemberId] = useState<number | null>(null);
   const [notes, setNotes] = useState('');
   const [isVerifyModalOpen, setIsVerifyModalOpen] = useState(false);
@@ -54,14 +59,44 @@ export function Distribution({ route, onNavigate, session }: ClientDistributionP
   const [isSavingDistribution, setIsSavingDistribution] = useState(false);
   const [blockingMessage, setBlockingMessage] = useState<string | null>(null);
   const [printPreviewPayload, setPrintPreviewPayload] = useState<ReceiptPayload | null>(null);
+  const [historyItems, setHistoryItems] = useState<ClientDistributionHistoryItem[]>([]);
+  const [isHistoryOpen, setIsHistoryOpen] = useState(false);
+  const [isLoadingHistory, setIsLoadingHistory] = useState(false);
+  const [isReprintingCycleCode, setIsReprintingCycleCode] = useState<number | null>(null);
+  const [expandedCycleCodes, setExpandedCycleCodes] = useState<number[]>([]);
   const scanBufferRef = useRef('');
   const scanTimerRef = useRef<number | null>(null);
 
   const filteredMembers = detail?.members ?? [];
+  const hasAssignableCycle = Boolean(detail?.activeCycles.some((cycle) => !cycle.isDistributed));
+  const isMemberSelectionDisabled = !hasAssignableCycle;
 
   const selectedMember = (() => {
     return filteredMembers.find((member) => member.memberId === selectedMemberId) ?? null;
   })();
+
+  const selectedCycleMap = new Map(detail?.activeCycles.map((cycle) => [cycle.cycleCode, cycle]) ?? []);
+  const findMemberByHistory = (item: ClientDistributionHistoryItem) => {
+    if (!detail) {
+      return null;
+    }
+
+    const byMemberId = detail.members.find((member) => member.memberId === item.memberId);
+    if (byMemberId) {
+      return byMemberId;
+    }
+
+    const normalizedDocument = item.collectedByDocument?.trim().toLowerCase();
+    if (!normalizedDocument) {
+      return null;
+    }
+
+    return (
+      detail.members.find(
+        (member) => member.documentNumber?.trim().toLowerCase() === normalizedDocument
+      ) ?? null
+    );
+  };
 
   useEffect(() => {
     if (route.distributionMode === 'detail') {
@@ -199,13 +234,22 @@ export function Distribution({ route, onNavigate, session }: ClientDistributionP
         return;
       }
 
-      const defaultCycle = detailData.activeCycles[0]?.cycleCode ?? null;
-      const defaultMember = detailData.members.find((member) => member.memberId === result.member.id);
-      const fallbackMember = detailData.members[0] ?? null;
+      const defaultCycle = detailData.activeCycles.find((cycle) => !cycle.isDistributed)?.cycleCode ?? null;
+      const defaultMember = detailData.members.find(
+        (member) =>
+          member.memberId === result.member.id &&
+          isMemberEligibleForDistribution(member.age) &&
+          hasUsableDocumentId(member.documentNumber)
+      );
+      const fallbackMember = detailData.members.find(
+        (member) => isMemberEligibleForDistribution(member.age) && hasUsableDocumentId(member.documentNumber)
+      ) ?? null;
+      const preferredMember = defaultMember ?? fallbackMember;
 
       setDetail(detailData);
-      setSelectedCycleCode(defaultCycle);
-      setSelectedMemberId(defaultMember?.memberId ?? fallbackMember?.memberId ?? null);
+      setSelectedCycleCodes(defaultCycle !== null ? [defaultCycle] : []);
+      setExpandedCycleCodes([]);
+      setSelectedMemberId(preferredMember?.memberId ?? null);
       setNotes('');
       setBlockingMessage(null);
 
@@ -229,7 +273,7 @@ export function Distribution({ route, onNavigate, session }: ClientDistributionP
       return;
     }
 
-    if (!detail || selectedCycleCode === null || selectedMemberId === null || !selectedMember) {
+    if (!detail || selectedCycleCodes.length === 0 || selectedMemberId === null || !selectedMember) {
       toast.error(intl.formatMessage({ id: 'common.error' }), {
         description: intl.formatMessage({ id: 'distribution.selectCycleError' })
       });
@@ -237,13 +281,26 @@ export function Distribution({ route, onNavigate, session }: ClientDistributionP
     }
 
     const normalizedVerify = verifyInput.trim();
-    const matchesFamilyCode = normalizedVerify === String(detail.household.familyUniqueCode);
-    const matchesDocumentId =
-      Boolean(selectedMember.documentNumber) && normalizedVerify === String(selectedMember.documentNumber);
+    const memberDocumentId = selectedMember.documentNumber?.trim() ?? '';
+    if (!hasUsableDocumentId(memberDocumentId)) {
+      toast.error(intl.formatMessage({ id: 'common.error' }), {
+        description: intl.formatMessage({ id: 'distribution.memberMissingDocumentError' })
+      });
+      return;
+    }
 
-    if (!matchesFamilyCode && !matchesDocumentId) {
+    const matchesDocumentId = normalizedVerify === memberDocumentId;
+
+    if (!matchesDocumentId) {
       toast.error(intl.formatMessage({ id: 'common.error' }), {
         description: intl.formatMessage({ id: 'distribution.verificationFailedError' })
+      });
+      return;
+    }
+
+    if (!isMemberEligibleForDistribution(selectedMember.age)) {
+      toast.error(intl.formatMessage({ id: 'common.error' }), {
+        description: intl.formatMessage({ id: 'distribution.memberAgeBlockedError' })
       });
       return;
     }
@@ -251,26 +308,43 @@ export function Distribution({ route, onNavigate, session }: ClientDistributionP
     setIsSavingDistribution(true);
     setBlockingMessage(null);
     try {
-      const selectedCycle =
-        detail.activeCycles.find((cycle) => cycle.cycleCode === selectedCycleCode) ?? null;
+      const deviceMacAddress = (await getDeviceMacAddress()) ?? '';
+      const selectedCycles = detail.activeCycles.filter(
+        (cycle) => selectedCycleCodes.includes(cycle.cycleCode) && !cycle.isDistributed
+      );
+      const savedCycles: Array<{ cycle: DistributionDetailData['activeCycles'][number]; distributionId: number }> =
+        [];
+      const duplicateCycles: number[] = [];
 
-      await saveDistributionOnLocalServer(session, {
-        subOperator: session.alias,
-        cycleCode: selectedCycleCode,
-        memberId: selectedMemberId
-      });
+      for (const cycle of selectedCycles) {
+        try {
+          const savedDistribution = await saveDistributionOnLocalServer(session, {
+            subOperator: session.alias,
+            familyUniqueCode: detail.household.familyUniqueCode,
+            cycleCode: cycle.cycleCode,
+            memberId: selectedMemberId,
+            notes: notes.trim() || null,
+            deviceMacAddress
+          });
+          savedCycles.push({ cycle, distributionId: savedDistribution.distributionId });
+        } catch (error) {
+          const message = error instanceof Error ? error.message.toLowerCase() : '';
+          if (message.includes('duplicate distribution blocked')) {
+            duplicateCycles.push(cycle.cycleCode);
+            continue;
+          }
+          throw error;
+        }
+      }
 
-      await saveClientDistributionHistory({
-        alias: session.alias,
-        host: session.host,
-        memberId: selectedMemberId,
-        familyUniqueCode: detail.household.familyUniqueCode,
-        cycleCode: selectedCycleCode,
-        cycleName:
-          selectedCycle?.cycleName ??
-          intl.formatMessage({ id: 'distribution.cycleFallback' }, { cycleCode: selectedCycleCode }),
-        collectedBy: selectedMember.fullName
-      });
+      if (savedCycles.length === 0) {
+        const visibleMessage = intl.formatMessage({ id: 'distribution.blockedDescription' });
+        setBlockingMessage(visibleMessage);
+        toast.error(intl.formatMessage({ id: 'distribution.blockedTitle' }), {
+          description: visibleMessage
+        });
+        return;
+      }
 
       window.dispatchEvent(new Event('client-distribution-history-updated'));
 
@@ -278,9 +352,21 @@ export function Distribution({ route, onNavigate, session }: ClientDistributionP
       setVerifyInput('');
       const printSettings = await getPrintSettings();
       if (printSettings.disabled) {
-        toast.success(intl.formatMessage({ id: 'common.saved' }), {
-          description: intl.formatMessage({ id: 'distribution.savedHostDescription' })
-        });
+        if (duplicateCycles.length > 0) {
+          toast.success(intl.formatMessage({ id: 'common.saved' }), {
+            description: intl.formatMessage(
+              { id: 'distribution.savedPartialDescription' },
+              { saved: savedCycles.length, skipped: duplicateCycles.length }
+            )
+          });
+        } else {
+          toast.success(intl.formatMessage({ id: 'common.saved' }), {
+            description: intl.formatMessage(
+              { id: 'distribution.savedLocalMultiDescription' },
+              { count: savedCycles.length }
+            )
+          });
+        }
         onNavigate({
           ...route,
           section: 'distribution',
@@ -289,28 +375,32 @@ export function Distribution({ route, onNavigate, session }: ClientDistributionP
         return;
       }
 
-      setPrintPreviewPayload({
-        title: intl.formatMessage({ id: 'distribution.receiptTitle' }),
-        headOfHousehold: detail.household.principle || selectedMember.fullName,
-        receiptId: '1234567890',
-        householdId: String(detail.household.familyUniqueCode),
-        fdp: session.host,
-        collectedBy: hideMiddleNumbers(selectedMember.documentNumber ?? String(selectedMember.memberId)),
-        printedAtIso: new Date().toISOString(),
-        cycles: selectedCycle
-          ? [
-              {
-                cycleName: selectedCycle.cycleName,
-                commodities: (selectedCycle.foodCommodities ?? []).map((commodity) => ({
-                  enName: commodity.en_name ?? '',
-                  arName: commodity.ar_name ?? '',
-                  quantity: String(commodity.quantity ?? intl.formatMessage({ id: 'common.na' }))
-                }))
-              }
-            ]
-          : [],
-        format: printSettings.format
-      });
+      setPrintPreviewPayload(
+        buildReceiptPayload({
+          title: intl.formatMessage({ id: 'distribution.receiptTitle' }),
+          headOfHousehold: detail.household.principle || selectedMember.fullName,
+          householdId: detail.household.familyUniqueCode,
+          receiptSequence: savedCycles[0]?.distributionId ?? null,
+          fdpCode: session.fdpCode,
+          fdpName: session.fieldOffice ?? session.host,
+          collectedByDocument: selectedMember.documentNumber ?? null,
+          printedAtIso: new Date().toISOString(),
+          cycles: savedCycles.map(({ cycle }) => ({
+            cycleName: cycle.cycleName,
+            foodCommodities: cycle.foodCommodities ?? []
+          })),
+          format: printSettings.format,
+          locale: intl.locale
+        })
+      );
+      if (duplicateCycles.length > 0) {
+        toast.success(intl.formatMessage({ id: 'common.saved' }), {
+          description: intl.formatMessage(
+            { id: 'distribution.savedPartialDescription' },
+            { saved: savedCycles.length, skipped: duplicateCycles.length }
+          )
+        });
+      }
     } catch (error) {
       const message = error instanceof Error ? error.message : '';
       if (message.toLowerCase().includes('duplicate distribution blocked')) {
@@ -327,6 +417,84 @@ export function Distribution({ route, onNavigate, session }: ClientDistributionP
     }
   };
 
+  const handleReprintCycle = async (cycleCode: number): Promise<void> => {
+    if (!detail) {
+      return;
+    }
+
+    setIsReprintingCycleCode(cycleCode);
+    try {
+      const rows = await getClientDistributionHistory({
+        alias: session?.alias ?? '',
+        search: '',
+        page: 1,
+        pageSize: 1000
+      });
+      const historyItem = rows.items.find(
+        (item) => item.familyUniqueCode === detail.household.familyUniqueCode && item.cycleCode === cycleCode
+      );
+      if (!historyItem) {
+        toast.error(intl.formatMessage({ id: 'common.error' }), {
+          description: intl.formatMessage({ id: 'distribution.historyEmpty' })
+        });
+        return;
+      }
+
+      const cycleMeta = selectedCycleMap.get(cycleCode);
+      const memberMeta = findMemberByHistory(historyItem);
+      const printSettings = await getPrintSettings();
+
+      setPrintPreviewPayload(
+        buildReceiptPayload({
+          title: intl.formatMessage({ id: 'distribution.receiptTitle' }),
+          headOfHousehold:
+            detail.household.principle || memberMeta?.fullName || intl.formatMessage({ id: 'common.na' }),
+          householdId: historyItem.familyUniqueCode,
+          receiptSequence: historyItem.id,
+          fdpCode: session?.fdpCode,
+          fdpName: session?.fieldOffice ?? session?.host ?? null,
+          collectedByDocument: historyItem.collectedByDocument ?? memberMeta?.documentNumber ?? null,
+          printedAtIso: historyItem.createdAt,
+          cycles: [
+            {
+              cycleName: cycleMeta?.cycleName ?? historyItem.cycleName,
+              foodCommodities: cycleMeta?.foodCommodities ?? []
+            }
+          ],
+          format: printSettings.format,
+          locale: intl.locale
+        })
+      );
+      setIsHistoryOpen(false);
+    } catch (error) {
+      showErrorToast(error);
+    } finally {
+      setIsReprintingCycleCode(null);
+    }
+  };
+
+  const handleOpenHistory = async (): Promise<void> => {
+    if (!detail || !session) {
+      return;
+    }
+
+    setIsLoadingHistory(true);
+    try {
+      const rows = await getClientDistributionHistory({
+        alias: session.alias,
+        search: '',
+        page: 1,
+        pageSize: 1000
+      });
+      setHistoryItems(rows.items.filter((item) => item.familyUniqueCode === detail.household.familyUniqueCode));
+      setIsHistoryOpen(true);
+    } catch (error) {
+      showErrorToast(error);
+    } finally {
+      setIsLoadingHistory(false);
+    }
+  };
+
   return (
     <section className="server-content-block">
       <h1 className="server-page-title">{intl.formatMessage({ id: 'distribution.title' })}</h1>
@@ -339,6 +507,7 @@ export function Distribution({ route, onNavigate, session }: ClientDistributionP
             <Input
               aria-label={intl.formatMessage({ id: 'distribution.householdSearchAria' })}
               className="distribution-search-input"
+              autoComplete="off"
               inputMode="numeric"
               pattern="[0-9]*"
               value={query}
@@ -398,23 +567,19 @@ export function Distribution({ route, onNavigate, session }: ClientDistributionP
             <table className="distribution-table" aria-label={intl.formatMessage({ id: 'distribution.resultsAria' })}>
               <thead>
                 <tr>
-                  <th>{intl.formatMessage({ id: 'table.uuid' })}</th>
-                  <th>{intl.formatMessage({ id: 'table.principle' })}</th>
-                  <th>{intl.formatMessage({ id: 'table.phone' })}</th>
-                  <th>{intl.formatMessage({ id: 'table.address' })}</th>
+                  <th>{intl.formatMessage({ id: 'distribution.idmId' })}</th>
+                  <th>{intl.formatMessage({ id: 'distribution.familyBooklet' })}</th>
+                  <th>{intl.formatMessage({ id: 'distribution.headOfHouseholdFullName' })}</th>
+                  <th>{intl.formatMessage({ id: 'distribution.fdpName' })}</th>
                   <th>{intl.formatMessage({ id: 'table.actions' })}</th>
                 </tr>
               </thead>
               <tbody>
                 <tr>
-                  <td>{result.member.id}</td>
-                  <td>
-                    {isPrincipleRole(result.member.role)
-                      ? intl.formatMessage({ id: 'common.yes' })
-                      : intl.formatMessage({ id: 'common.no' })}
-                  </td>
-                  <td>{intl.formatMessage({ id: 'common.na' })}</td>
-                  <td>{intl.formatMessage({ id: 'common.na' })}</td>
+                  <td>{result.member.familyUniqueCode}</td>
+                  <td>{result.member.familyBooklet ?? intl.formatMessage({ id: 'common.na' })}</td>
+                  <td>{result.member.principleFullName}</td>
+                  <td>{result.member.fdpName}</td>
                   <td className="distribution-action-cell">
                     <div className="distribution-action-content">
                       <button
@@ -451,11 +616,11 @@ export function Distribution({ route, onNavigate, session }: ClientDistributionP
                 <dd>{detail.household.idmId}</dd>
               </div>
               <div>
-                <dt>{intl.formatMessage({ id: 'distribution.booklet' })}</dt>
+                <dt>{intl.formatMessage({ id: 'distribution.familyBooklet' })}</dt>
                 <dd>{detail.household.booklet}</dd>
               </div>
               <div>
-                <dt>{intl.formatMessage({ id: 'distribution.principle' })}</dt>
+                <dt>{intl.formatMessage({ id: 'distribution.headOfHouseholdFullName' })}</dt>
                 <dd>{detail.household.principle}</dd>
               </div>
               <div>
@@ -471,19 +636,22 @@ export function Distribution({ route, onNavigate, session }: ClientDistributionP
                 <dd>{detail.household.pbwgs}</dd>
               </div>
               <div>
-                <dt>{intl.formatMessage({ id: 'distribution.children623' })}</dt>
+                <dt>{intl.formatMessage({ id: 'distribution.childrenBetween623Months' })}</dt>
                 <dd>{detail.household.children623}</dd>
               </div>
             </dl>
 
             <div className="distribution-sidebar-actions">
               <p className="distribution-detail-section-title">{intl.formatMessage({ id: 'distribution.actionsSection' })}</p>
-              <button type="button" className="distribution-link-action" disabled>
-                {intl.formatMessage({ id: 'distribution.distributionHistory' })}
-              </button>
-              <button type="button" className="distribution-link-action" disabled>
-                {intl.formatMessage({ id: 'distribution.reprint' })}
-              </button>
+              <Button
+                className="server-btn distribution-history-btn"
+                onClick={() => void handleOpenHistory()}
+                disabled={isLoadingHistory}
+              >
+                {isLoadingHistory
+                  ? intl.formatMessage({ id: 'common.loading' })
+                  : intl.formatMessage({ id: 'distribution.distributionHistory' })}
+              </Button>
             </div>
           </aside>
 
@@ -498,28 +666,125 @@ export function Distribution({ route, onNavigate, session }: ClientDistributionP
                   <th>{intl.formatMessage({ id: 'table.quantity' })}</th>
                   <th>{intl.formatMessage({ id: 'table.startDate' })}</th>
                   <th>{intl.formatMessage({ id: 'table.endDate' })}</th>
+                  <th>{intl.formatMessage({ id: 'table.actions' })}</th>
                 </tr>
               </thead>
               <tbody>
-                {detail.activeCycles.map((cycle) => (
-                  <tr key={cycle.cycleCode}>
-                    <td>
-                      <input
-                        type="radio"
-                        name="selected-cycle"
-                        checked={selectedCycleCode === cycle.cycleCode}
-                        onChange={() => {
-                          setSelectedCycleCode(cycle.cycleCode);
+                {detail.activeCycles.map((cycle) => {
+                  const isExpanded = expandedCycleCodes.includes(cycle.cycleCode);
+                  return (
+                    <Fragment key={cycle.cycleCode}>
+                      <tr
+                        className="distribution-cycle-row"
+                        onClick={() => {
+                          setExpandedCycleCodes((previous) => {
+                            if (previous.includes(cycle.cycleCode)) {
+                              return previous.filter((value) => value !== cycle.cycleCode);
+                            }
+                            return [...previous, cycle.cycleCode];
+                          });
                         }}
-                      />
-                    </td>
-                    <td>{cycle.cycleName}</td>
-                    <td>{cycle.assistanceType}</td>
-                    <td>{cycle.quantity}</td>
-                    <td>{cycle.startDate}</td>
-                    <td>{cycle.endDate}</td>
-                  </tr>
-                ))}
+                      >
+                        <td
+                          onClick={(event) => {
+                            event.stopPropagation();
+                          }}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={selectedCycleCodes.includes(cycle.cycleCode)}
+                            disabled={cycle.isDistributed}
+                            onChange={() => {
+                              if (cycle.isDistributed) {
+                                return;
+                              }
+                              setSelectedCycleCodes((previous) => {
+                                if (previous.includes(cycle.cycleCode)) {
+                                  return previous.filter((value) => value !== cycle.cycleCode);
+                                }
+                                return [...previous, cycle.cycleCode];
+                              });
+                            }}
+                          />
+                        </td>
+                        <td>
+                          <span className="distribution-cycle-name">
+                            {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                            {cycle.cycleName}
+                          </span>
+                        </td>
+                        <td>{cycle.assistanceType}</td>
+                        <td>{cycle.quantity}</td>
+                        <td>{cycle.startDate}</td>
+                        <td>{cycle.endDate}</td>
+                        <td
+                          onClick={(event) => {
+                            event.stopPropagation();
+                          }}
+                        >
+                          {cycle.isDistributed ? (
+                            <button
+                              type="button"
+                              className="distribution-action-btn"
+                              onClick={() => {
+                                void handleReprintCycle(cycle.cycleCode);
+                              }}
+                              disabled={isReprintingCycleCode === cycle.cycleCode}
+                            >
+                              <Printer size={14} className="distribution-btn-icon" />
+                              {isReprintingCycleCode === cycle.cycleCode
+                                ? intl.formatMessage({ id: 'common.loading' })
+                                : intl.formatMessage({ id: 'distribution.reprint' })}
+                            </button>
+                          ) : null}
+                        </td>
+                      </tr>
+                      {isExpanded ? (
+                        <tr className="distribution-commodity-row">
+                          <td colSpan={7}>
+                            <div className="distribution-commodity-panel">
+                              <p className="distribution-detail-section-title">
+                                {intl.formatMessage({ id: 'distribution.foodCommodities' })}
+                              </p>
+                              {cycle.foodCommodities.length === 0 ? (
+                                <p className="distribution-empty">
+                                  {intl.formatMessage({ id: 'distribution.foodCommoditiesEmpty' })}
+                                </p>
+                              ) : (
+                                <table className="distribution-detail-table distribution-commodity-table">
+                                  <thead>
+                                    <tr>
+                                      <th>{intl.formatMessage({ id: 'table.id' })}</th>
+                                      <th>{intl.formatMessage({ id: 'table.name' })}</th>
+                                      <th>{intl.formatMessage({ id: 'table.quantity' })}</th>
+                                      <th>{intl.formatMessage({ id: 'distribution.unit' })}</th>
+                                      <th>{intl.formatMessage({ id: 'distribution.weight' })}</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {cycle.foodCommodities.map((commodity) => (
+                                      <tr key={`${cycle.cycleCode}-${commodity.id}-${commodity.unique_id}`}>
+                                        <td>{commodity.id}</td>
+                                        <td>
+                                          {intl.locale.toLowerCase().startsWith('ar')
+                                            ? commodity.ar_name || commodity.en_name || intl.formatMessage({ id: 'common.na' })
+                                            : commodity.en_name || commodity.ar_name || intl.formatMessage({ id: 'common.na' })}
+                                        </td>
+                                        <td>{commodity.quantity ?? intl.formatMessage({ id: 'common.na' })}</td>
+                                        <td>{commodity.unit ?? intl.formatMessage({ id: 'common.na' })}</td>
+                                        <td>{commodity.weight ?? intl.formatMessage({ id: 'common.na' })}</td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      ) : null}
+                    </Fragment>
+                  );
+                })}
               </tbody>
             </table>
 
@@ -541,12 +806,35 @@ export function Distribution({ route, onNavigate, session }: ClientDistributionP
                         type="radio"
                         name="selected-member"
                         checked={selectedMemberId === member.memberId}
+                        disabled={
+                          isMemberSelectionDisabled ||
+                          !isMemberEligibleForDistribution(member.age) ||
+                          !hasUsableDocumentId(member.documentNumber)
+                        }
                         onChange={() => {
+                          if (isMemberSelectionDisabled) {
+                            return;
+                          }
+                          if (!isMemberEligibleForDistribution(member.age)) {
+                            return;
+                          }
+                          if (!hasUsableDocumentId(member.documentNumber)) {
+                            return;
+                          }
                           setSelectedMemberId(member.memberId);
                         }}
                       />
                     </td>
-                    <td>{member.fullName}</td>
+                    <td>
+                      <div className="distribution-member-name-cell">
+                        <span>{member.fullName}</span>
+                        {!isMemberEligibleForDistribution(member.age) ? (
+                          <span className="distribution-member-badge">
+                            {intl.formatMessage({ id: 'distribution.memberNotEligible' })}
+                          </span>
+                        ) : null}
+                      </div>
+                    </td>
                     <td>{member.documentNumber ?? member.memberId}</td>
                     <td>{asAgeLabel(member.age, intl.formatMessage({ id: 'common.na' }))}</td>
                   </tr>
@@ -571,7 +859,11 @@ export function Distribution({ route, onNavigate, session }: ClientDistributionP
                 onClick={() => {
                   setIsVerifyModalOpen(true);
                 }}
-                disabled={selectedCycleCode === null || selectedMemberId === null}
+                disabled={
+                  selectedCycleCodes.length === 0 ||
+                  selectedMemberId === null ||
+                  !hasUsableDocumentId(selectedMember?.documentNumber ?? null)
+                }
               >
                 {intl.formatMessage({ id: 'actions.confirm' })}
               </Button>
@@ -591,6 +883,78 @@ export function Distribution({ route, onNavigate, session }: ClientDistributionP
             </div>
           </section>
         </section>
+      ) : null}
+
+      {isHistoryOpen ? (
+        <div className="distribution-modal-backdrop" role="presentation">
+          <div className="distribution-modal distribution-history-modal" role="dialog" aria-modal="true">
+            <h2>{intl.formatMessage({ id: 'distribution.distributionHistory' })}</h2>
+            {historyItems.length === 0 ? (
+              <p>{intl.formatMessage({ id: 'distribution.historyEmpty' })}</p>
+            ) : (
+              <table className="distribution-detail-table distribution-history-table">
+                <thead>
+                  <tr>
+                    <th>{intl.formatMessage({ id: 'table.date' })}</th>
+                    <th>{intl.formatMessage({ id: 'table.cycle' })}</th>
+                    <th>{intl.formatMessage({ id: 'distribution.notes' })}</th>
+                    <th>{intl.formatMessage({ id: 'table.actions' })}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {historyItems.map((item) => {
+                    const parsedDate = new Date(item.createdAt);
+                    const date = Number.isNaN(parsedDate.getTime())
+                      ? intl.formatMessage({ id: 'common.na' })
+                      : `${parsedDate.toLocaleDateString(intl.locale, {
+                          day: '2-digit',
+                          month: 'short',
+                          year: 'numeric'
+                        })} ${parsedDate.toLocaleTimeString(intl.locale, {
+                          hour: '2-digit',
+                          minute: '2-digit',
+                          hour12: false,
+                          hourCycle: 'h23'
+                        })}`;
+                    return (
+                      <tr key={item.id}>
+                        <td>{date}</td>
+                        <td>{item.cycleName}</td>
+                        <td>{item.notes ?? intl.formatMessage({ id: 'common.na' })}</td>
+                        <td>
+                          <button
+                            type="button"
+                            className="distribution-action-btn"
+                            onClick={() => {
+                              void handleReprintCycle(item.cycleCode);
+                            }}
+                            disabled={isReprintingCycleCode === item.cycleCode}
+                          >
+                            <Printer size={14} className="distribution-btn-icon" />
+                            {isReprintingCycleCode === item.cycleCode
+                              ? intl.formatMessage({ id: 'common.loading' })
+                              : intl.formatMessage({ id: 'distribution.reprint' })}
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            )}
+            <div className="distribution-modal-actions">
+              <Button
+                variant="outline"
+                className="server-btn distribution-cancel-btn"
+                onClick={() => {
+                  setIsHistoryOpen(false);
+                }}
+              >
+                {intl.formatMessage({ id: 'common.close' })}
+              </Button>
+            </div>
+          </div>
+        </div>
       ) : null}
 
       {isVerifyModalOpen ? (

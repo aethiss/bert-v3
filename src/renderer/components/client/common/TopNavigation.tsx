@@ -1,4 +1,4 @@
-import { Link2, Printer } from 'lucide-react';
+import { Link2 } from 'lucide-react';
 import { useIntl } from 'react-intl';
 import { Button } from '@ui/components/ui/button';
 import type { ClientSection } from '@renderer/components/client/types';
@@ -71,10 +71,6 @@ export function TopNavigation({
       </nav>
 
       <div className="server-status-area">
-        <div className="server-status ready">
-          <Printer size={14} />
-          <span>{intl.formatMessage({ id: 'status.ready' })}</span>
-        </div>
         <div className={isConnected ? 'server-status online' : 'server-status offline'}>
           <Link2 size={14} />
           <span>

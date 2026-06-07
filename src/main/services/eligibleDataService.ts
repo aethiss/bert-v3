@@ -14,8 +14,8 @@ import type {
   EligibleFamilyApiModel,
   DistributionHouseholdInfo,
   DistributionHouseholdMember,
-  DistributionSearchMember,
   DistributionSearchResult,
+  EligibleCycleApiModel,
   EligibleCycleSummary,
   EligibleMemberApiModel,
   EligibleMembersApiResponse,
@@ -23,6 +23,7 @@ import type {
   LocalDistributionEventInput
 } from '../../shared/types/eligible';
 import type { OperationsDashboardQuery } from '../../shared/types/operations';
+import { getDeviceMacAddress } from '../utils/deviceInfo';
 
 function asNumber(value: unknown, fallback = 0): number {
   return typeof value === 'number' && Number.isFinite(value) ? value : fallback;
@@ -95,6 +96,32 @@ function toDisplayName(firstName: string | null, lastName: string | null): strin
   return joined || 'N/A';
 }
 
+function getEligibleCycleDisplayName(cycle: EligibleCycleApiModel): string {
+  return (
+    asText(cycle.cycleName).trim() ||
+    asText(cycle.cycleEnName).trim() ||
+    asText(cycle.cycleArName).trim() ||
+    `Cycle ${cycle.cycleCode}`
+  );
+}
+
+function getEligibleCycleFoodCommodities(
+  cycle: EligibleCycleApiModel
+): EligibleFoodCommodityApiModel[] {
+  const foodBasketCommodities = (cycle.food_basket ?? []).flatMap(
+    (basket) => basket.commodities ?? []
+  );
+  if (foodBasketCommodities.length > 0) {
+    return foodBasketCommodities;
+  }
+
+  return cycle.foodCommodities ?? [];
+}
+
+function getEligibleFamilyBooklet(family: EligibleFamilyApiModel): string | null {
+  return asNullableText(family.principle_family_booklet);
+}
+
 export function normalizeClientHistoryPagination(page: number, pageSize: number): {
   page: number;
   pageSize: number;
@@ -115,7 +142,7 @@ export function buildOverviewSummaryFromPayload(
 ): EligibleOverviewSummary {
   const cycles: EligibleCycleSummary[] = payload.cycles.slice(0, 2).map((cycle) => ({
     cycleCode: cycle.cycleCode,
-    cycleName: cycle.cycleName,
+    cycleName: getEligibleCycleDisplayName(cycle),
     assistancePackageName: cycle.assistancePackageName,
     startDate: cycle.startDate,
     endDate: cycle.endDate,
@@ -173,9 +200,9 @@ export interface EligibleDataService {
       items: Array<{
         id: number;
         subOperator: string;
-        memberId: number;
+        familyUniqueCode: number;
+        documentNumber: string | null;
         date: string;
-        time: string;
         cycleCode: number;
         cycleName: string;
         status: string;
@@ -193,7 +220,11 @@ export interface EligibleDataService {
   clearEligibleData(): Promise<void>;
 }
 
-interface DistributionMemberRow extends DistributionSearchMember {
+interface DistributionMemberRow {
+  id: number;
+  role: string | null;
+  documentNumber: string | null;
+  familyUniqueCode: number;
   firstName: string | null;
   lastName: string | null;
 }
@@ -233,6 +264,7 @@ interface DistributionHouseholdMemberRow {
 
 interface DistributionHouseholdInfoRow {
   familyUniqueCode: number;
+  booklet: string | null;
   children623: number;
   updatedAt: string | null;
 }
@@ -259,6 +291,14 @@ function isDuplicateDistributionError(error: unknown): boolean {
 export function pickPreferredDistributionMember(
   rows: DistributionMemberRow[]
 ): DistributionMemberRow | null {
+  if (rows.length === 0) {
+    return null;
+  }
+
+  return rows.find((row) => isPrincipleRole(row.role)) ?? rows[0];
+}
+
+function pickPrincipleDistributionMember(rows: DistributionMemberRow[]): DistributionMemberRow | null {
   if (rows.length === 0) {
     return null;
   }
@@ -449,7 +489,7 @@ export function createEligibleDataService(db: Database): EligibleDataService {
           `,
           cycleCode,
           asText(cycle.cycleId),
-          asText(cycle.cycleName),
+          getEligibleCycleDisplayName(cycle),
           asText(cycle.assistancePackageName),
           asText(cycle.startDate),
           asText(cycle.endDate),
@@ -459,7 +499,7 @@ export function createEligibleDataService(db: Database): EligibleDataService {
           asNumber(cycle.household_count)
         );
 
-        for (const commodity of cycle.foodCommodities ?? []) {
+        for (const commodity of getEligibleCycleFoodCommodities(cycle)) {
           const commodityId = normalizeCommodityId(commodity);
           if (commodityId === null) {
             skippedCycleFoodCommodities += 1;
@@ -520,15 +560,17 @@ export function createEligibleDataService(db: Database): EligibleDataService {
             address,
             status,
             eligible,
+            principle_family_booklet,
             fdp_id,
             fdp_name,
             children_6_23_months
           )
-          VALUES (?, ?, ?, ?, ?, ?, ?)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?)
           ON CONFLICT(family_unique_code) DO UPDATE SET
             address = excluded.address,
             status = excluded.status,
             eligible = excluded.eligible,
+            principle_family_booklet = excluded.principle_family_booklet,
             fdp_id = excluded.fdp_id,
             fdp_name = excluded.fdp_name,
             children_6_23_months = excluded.children_6_23_months,
@@ -538,6 +580,7 @@ export function createEligibleDataService(db: Database): EligibleDataService {
           asNullableText(family.address),
           asText(family.status),
           family.eligible ? 1 : 0,
+          getEligibleFamilyBooklet(family),
           asText(family.fdp_id),
           asText(family.fdp_name),
           asNumber(family.Number_of_Children_between_6_and_23_Months)
@@ -764,6 +807,18 @@ export function createEligibleDataService(db: Database): EligibleDataService {
         );
 
         const preferredFamilyMember = pickPreferredDistributionMember(familyRows ?? []);
+        const principleFamilyMember = pickPrincipleDistributionMember(familyRows ?? []);
+        const familyRow = await db.get<{ fdpName: string; familyBooklet: string | null }>(
+          `
+          SELECT
+            fdp_name as fdpName,
+            principle_family_booklet as familyBooklet
+          FROM families
+          WHERE family_unique_code = ?
+          LIMIT 1
+          `,
+          familyUniqueCode
+        );
         if (preferredFamilyMember) {
           return {
             match: 'familyUniqueCode',
@@ -773,12 +828,77 @@ export function createEligibleDataService(db: Database): EligibleDataService {
                 preferredFamilyMember.firstName,
                 preferredFamilyMember.lastName
               ),
+              principleFullName: toDisplayName(
+                principleFamilyMember?.firstName ?? preferredFamilyMember.firstName,
+                principleFamilyMember?.lastName ?? preferredFamilyMember.lastName
+              ),
+              fdpName: asText(familyRow?.fdpName, 'N/A'),
+              familyBooklet: asNullableText(familyRow?.familyBooklet),
               role: preferredFamilyMember.role,
               documentNumber: preferredFamilyMember.documentNumber,
               familyUniqueCode: preferredFamilyMember.familyUniqueCode
             }
           };
         }
+      }
+    }
+
+    const familyByBooklet = await db.get<{
+      familyUniqueCode: number;
+      fdpName: string;
+      familyBooklet: string | null;
+    }>(
+      `
+      SELECT
+        family_unique_code as familyUniqueCode,
+        fdp_name as fdpName,
+        principle_family_booklet as familyBooklet
+      FROM families
+      WHERE LOWER(TRIM(COALESCE(principle_family_booklet, ''))) = LOWER(TRIM(?))
+      LIMIT 1
+      `,
+      normalizedQuery
+    );
+
+    if (familyByBooklet) {
+      const familyRows = await db.all<DistributionMemberRow[]>(
+        `
+        SELECT
+          m.member_id as id,
+          m.role as role,
+          m.document_number as documentNumber,
+          m.family_unique_code as familyUniqueCode,
+          m.first_name as firstName,
+          m.last_name as lastName
+        FROM members m
+        WHERE m.family_unique_code = ?
+        ORDER BY m.member_id ASC
+        `,
+        familyByBooklet.familyUniqueCode
+      );
+      const preferredFamilyMember = pickPreferredDistributionMember(familyRows ?? []);
+      const principleFamilyMember = pickPrincipleDistributionMember(familyRows ?? []);
+
+      if (preferredFamilyMember) {
+        return {
+          match: 'familyBooklet',
+          member: {
+            id: preferredFamilyMember.id,
+            fullName: toDisplayName(
+              preferredFamilyMember.firstName,
+              preferredFamilyMember.lastName
+            ),
+            principleFullName: toDisplayName(
+              principleFamilyMember?.firstName ?? preferredFamilyMember.firstName,
+              principleFamilyMember?.lastName ?? preferredFamilyMember.lastName
+            ),
+            fdpName: asText(familyByBooklet.fdpName, 'N/A'),
+            familyBooklet: asNullableText(familyByBooklet.familyBooklet),
+            role: preferredFamilyMember.role,
+            documentNumber: preferredFamilyMember.documentNumber,
+            familyUniqueCode: preferredFamilyMember.familyUniqueCode
+          }
+        };
       }
     }
 
@@ -803,11 +923,45 @@ export function createEligibleDataService(db: Database): EligibleDataService {
       return null;
     }
 
+    const familyRows = await db.all<DistributionMemberRow[]>(
+      `
+      SELECT
+        m.member_id as id,
+        m.role as role,
+        m.document_number as documentNumber,
+        m.family_unique_code as familyUniqueCode,
+        m.first_name as firstName,
+        m.last_name as lastName
+      FROM members m
+      WHERE m.family_unique_code = ?
+      ORDER BY m.member_id ASC
+      `,
+      memberByDocument.familyUniqueCode
+    );
+    const principleFamilyMember = pickPrincipleDistributionMember(familyRows ?? []);
+    const familyRow = await db.get<{ fdpName: string; familyBooklet: string | null }>(
+      `
+      SELECT
+        fdp_name as fdpName,
+        principle_family_booklet as familyBooklet
+      FROM families
+      WHERE family_unique_code = ?
+      LIMIT 1
+      `,
+      memberByDocument.familyUniqueCode
+    );
+
     return {
       match: 'documentNumber',
       member: {
         id: memberByDocument.id,
         fullName: toDisplayName(memberByDocument.firstName, memberByDocument.lastName),
+        principleFullName: toDisplayName(
+          principleFamilyMember?.firstName ?? memberByDocument.firstName,
+          principleFamilyMember?.lastName ?? memberByDocument.lastName
+        ),
+        fdpName: asText(familyRow?.fdpName, 'N/A'),
+        familyBooklet: asNullableText(familyRow?.familyBooklet),
         role: memberByDocument.role,
         documentNumber: memberByDocument.documentNumber,
         familyUniqueCode: memberByDocument.familyUniqueCode
@@ -827,6 +981,7 @@ export function createEligibleDataService(db: Database): EligibleDataService {
       `
       SELECT
         family_unique_code as familyUniqueCode,
+        principle_family_booklet as booklet,
         children_6_23_months as children623,
         updated_at as updatedAt
       FROM families
@@ -966,14 +1121,14 @@ export function createEligibleDataService(db: Database): EligibleDataService {
     const household: DistributionHouseholdInfo = {
       familyUniqueCode: householdRow.familyUniqueCode,
       idmId: String(householdRow.familyUniqueCode),
-      booklet: String(params.memberId),
+      booklet: asText(householdRow.booklet).trim() || 'N/A',
       principle: toDisplayName(
         principleRow?.firstName ?? fallbackMember?.firstName ?? null,
         principleRow?.lastName ?? fallbackMember?.lastName ?? null
       ),
       phone: 'N/A',
-      registrationDate: formatDate(householdRow.updatedAt, '26-Jan-2025'),
-      pbwgs: activeCycleRows[0]?.quantity || '1',
+      registrationDate: 'N/A',
+      pbwgs: 'N/A',
       children623: asNumber(householdRow.children623)
     };
 
@@ -1029,6 +1184,8 @@ export function createEligibleDataService(db: Database): EligibleDataService {
       throw new Error('Invalid quantity for distribution event.');
     }
 
+    const deviceMacAddress = payload.deviceMacAddress.trim();
+
     const duplicateRow = await db.get<{ count: number }>(
       `
       SELECT COUNT(*) as count
@@ -1074,9 +1231,10 @@ export function createEligibleDataService(db: Database): EligibleDataService {
           quantity,
           app_signature,
           notes,
+          device_mac_address,
           status
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending_local')
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending_local')
         `,
         payload.familyUniqueCode,
         payload.memberId,
@@ -1086,7 +1244,8 @@ export function createEligibleDataService(db: Database): EligibleDataService {
         payload.subOperator,
         normalizedQuantity,
         appSignature,
-        payload.notes
+        payload.notes,
+        deviceMacAddress
       );
     } catch (error) {
       if (isDuplicateDistributionError(error)) {
@@ -1181,6 +1340,7 @@ export function createEligibleDataService(db: Database): EligibleDataService {
         quantity: number;
         appSignature: string;
         notes: string | null;
+        deviceMacAddress: string;
         status: string;
         createdAt: string;
       }>
@@ -1197,6 +1357,7 @@ export function createEligibleDataService(db: Database): EligibleDataService {
         quantity as quantity,
         app_signature as appSignature,
         notes as notes,
+        device_mac_address as deviceMacAddress,
         status as status,
         created_at as createdAt
       FROM distribution_queue
@@ -1275,7 +1436,7 @@ export function createEligibleDataService(db: Database): EligibleDataService {
         UNION ALL
 
         SELECT
-          -1 as id,
+          sdh.rowid as id,
           sdh.family_unique_code as familyUniqueCode,
           COALESCE(m.member_id, 0) as memberId,
           sdh.collected_by_document as collectedByDocument,
@@ -1359,9 +1520,9 @@ export function createEligibleDataService(db: Database): EligibleDataService {
       items: Array<{
         id: number;
         subOperator: string;
-        memberId: number;
+        familyUniqueCode: number;
+        documentNumber: string | null;
         date: string;
-        time: string;
         cycleCode: number;
         cycleName: string;
         status: string;
@@ -1382,26 +1543,30 @@ export function createEligibleDataService(db: Database): EligibleDataService {
     const searchPattern = `%${search}%`;
     const hasSearch = search.length > 0;
 
-    const clientOnlyClause = `TRIM(COALESCE(dq.sub_operator, '')) <> ''`;
-    const clientFilterClause =
-      hasSearch
-        ? `WHERE ${clientOnlyClause} AND (LOWER(COALESCE(dq.sub_operator, '')) LIKE ? OR CAST(dq.member_id AS TEXT) LIKE ?)`
-        : `WHERE ${clientOnlyClause}`;
+    const distributionFilterClause = hasSearch
+      ? `WHERE (
+          LOWER(COALESCE(NULLIF(TRIM(dq.sub_operator), ''), NULLIF(TRIM(u.email), ''), 'server')) LIKE ?
+          OR CAST(dq.family_unique_code AS TEXT) LIKE ?
+          OR LOWER(COALESCE(m.document_number, '')) LIKE ?
+        )`
+      : '';
     const tableFilterClause =
       hasSearch
-        ? "WHERE (LOWER(COALESCE(NULLIF(TRIM(dq.sub_operator), ''), NULLIF(TRIM(u.email), ''), 'server')) LIKE ? OR CAST(dq.member_id AS TEXT) LIKE ?)"
+        ? "WHERE (LOWER(COALESCE(NULLIF(TRIM(dq.sub_operator), ''), NULLIF(TRIM(u.email), ''), 'server')) LIKE ? OR CAST(dq.family_unique_code AS TEXT) LIKE ? OR LOWER(COALESCE(m.document_number, '')) LIKE ?)"
         : '';
 
     const params: unknown[] = [];
     if (hasSearch) {
-      params.push(searchPattern, searchPattern);
+      params.push(searchPattern, searchPattern, searchPattern);
     }
 
     const totalRow = await db.get<{ count: number }>(
       `
       SELECT COUNT(*) as count
       FROM distribution_queue dq
-      ${clientFilterClause}
+      LEFT JOIN members m ON m.member_id = dq.member_id
+      LEFT JOIN "user" u ON u.user_id = dq.main_operator
+      ${distributionFilterClause}
       `,
       ...params
     );
@@ -1412,6 +1577,7 @@ export function createEligibleDataService(db: Database): EligibleDataService {
       SELECT COUNT(*) as count
       FROM distribution_queue dq
       LEFT JOIN "user" u ON u.user_id = dq.main_operator
+      LEFT JOIN members m ON m.member_id = dq.member_id
       ${tableFilterClause}
       `,
       ...params
@@ -1441,7 +1607,6 @@ export function createEligibleDataService(db: Database): EligibleDataService {
         dq.cycle_code as cycleCode,
         COUNT(*) as distributedCount
       FROM distribution_queue dq
-      WHERE TRIM(COALESCE(dq.sub_operator, '')) <> ''
       GROUP BY dq.cycle_code
       `
     );
@@ -1460,10 +1625,10 @@ export function createEligibleDataService(db: Database): EligibleDataService {
     const overviewRows = await db.all<Array<{ alias: string; distributedCount: number }>>(
       `
       SELECT
-        COALESCE(NULLIF(TRIM(dq.sub_operator), ''), 'Unknown') as alias,
+        COALESCE(NULLIF(TRIM(dq.sub_operator), ''), NULLIF(TRIM(u.email), ''), 'SERVER') as alias,
         COUNT(*) as distributedCount
       FROM distribution_queue dq
-      WHERE TRIM(COALESCE(dq.sub_operator, '')) <> ''
+      LEFT JOIN "user" u ON u.user_id = dq.main_operator
       GROUP BY alias
       ORDER BY distributedCount DESC, alias ASC
       `
@@ -1478,11 +1643,11 @@ export function createEligibleDataService(db: Database): EligibleDataService {
     >(
       `
       SELECT
-        COALESCE(NULLIF(TRIM(dq.sub_operator), ''), 'Unknown') as alias,
+        COALESCE(NULLIF(TRIM(dq.sub_operator), ''), NULLIF(TRIM(u.email), ''), 'SERVER') as alias,
         dq.cycle_code as cycleCode,
         COUNT(*) as distributedCount
       FROM distribution_queue dq
-      WHERE TRIM(COALESCE(dq.sub_operator, '')) <> ''
+      LEFT JOIN "user" u ON u.user_id = dq.main_operator
       GROUP BY alias, dq.cycle_code
       ORDER BY alias ASC, dq.cycle_code DESC
       `
@@ -1498,9 +1663,11 @@ export function createEligibleDataService(db: Database): EligibleDataService {
         id: number;
         subOperator: string | null;
         operatorEmail: string | null;
-        memberId: number;
+        familyUniqueCode: number;
+        documentNumber: string | null;
         cycleCode: number;
         cycleName: string | null;
+        notes: string | null;
         status: string;
         createdAt: string;
       }>
@@ -1510,14 +1677,17 @@ export function createEligibleDataService(db: Database): EligibleDataService {
         dq.id as id,
         dq.sub_operator as subOperator,
         u.email as operatorEmail,
-        dq.member_id as memberId,
+        dq.family_unique_code as familyUniqueCode,
+        m.document_number as documentNumber,
         dq.cycle_code as cycleCode,
         c.cycle_name as cycleName,
+        dq.notes as notes,
         dq.status as status,
         dq.created_at as createdAt
       FROM distribution_queue dq
       LEFT JOIN cycles c ON c.cycle_code = dq.cycle_code
       LEFT JOIN "user" u ON u.user_id = dq.main_operator
+      LEFT JOIN members m ON m.member_id = dq.member_id
       ${tableFilterClause}
       ORDER BY dq.created_at DESC, dq.id DESC
       LIMIT ? OFFSET ?
@@ -1548,9 +1718,10 @@ export function createEligibleDataService(db: Database): EligibleDataService {
         id: asNumber(row.id),
         subOperator:
           asText(row.subOperator).trim() || asText(row.operatorEmail).trim() || 'SERVER',
-        memberId: asNumber(row.memberId),
-        date,
-        time,
+        familyUniqueCode: asNumber(row.familyUniqueCode),
+        documentNumber: asNullableText(row.documentNumber),
+        date: `${date} ${time}`,
+        notes: asNullableText(row.notes),
         cycleCode: asNumber(row.cycleCode),
         cycleName: asText(row.cycleName, `Cycle ${row.cycleCode}`),
         status: asText(row.status, 'pending_local'),
@@ -1586,6 +1757,8 @@ export function createEligibleDataService(db: Database): EligibleDataService {
     if (!Number.isFinite(payload.cycleCode)) {
       throw new Error('Invalid cycleCode for client distribution event.');
     }
+
+    const deviceMacAddress = payload.deviceMacAddress.trim() || getDeviceMacAddress() || '';
 
     const familyRow = await db.get<{ familyUniqueCode: number }>(
       `
@@ -1646,9 +1819,10 @@ export function createEligibleDataService(db: Database): EligibleDataService {
         quantity,
         app_signature,
         notes,
+        device_mac_address,
         status
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending_local')
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending_local')
       `,
       familyUniqueCode,
       payload.memberId,
@@ -1658,7 +1832,8 @@ export function createEligibleDataService(db: Database): EligibleDataService {
       subOperator,
       quantity,
       'LAN_CLIENT',
-      null
+      null,
+      deviceMacAddress
     );
 
     return {
@@ -1688,6 +1863,10 @@ export function createEligibleDataService(db: Database): EligibleDataService {
 
     const cycleName = payload.cycleName.trim() || `Cycle ${payload.cycleCode}`;
     const collectedBy = payload.collectedBy.trim() || 'N/A';
+    const collectedByDocument = payload.collectedByDocument?.trim() || null;
+    const quantity = Number.isFinite(payload.quantity) && payload.quantity > 0
+      ? Math.max(1, Math.round(payload.quantity))
+      : 1;
 
     const result = await db.run(
       `
@@ -1698,9 +1877,12 @@ export function createEligibleDataService(db: Database): EligibleDataService {
         family_unique_code,
         cycle_code,
         cycle_name,
-        collected_by
+        collected_by,
+        collected_by_document,
+        quantity,
+        notes
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `,
       alias,
       host,
@@ -1708,7 +1890,10 @@ export function createEligibleDataService(db: Database): EligibleDataService {
       payload.familyUniqueCode,
       payload.cycleCode,
       cycleName,
-      collectedBy
+      collectedBy,
+      collectedByDocument,
+      quantity,
+      payload.notes?.trim() || null
     );
 
     return {
@@ -1743,9 +1928,11 @@ export function createEligibleDataService(db: Database): EligibleDataService {
       SELECT COUNT(*) as count
       FROM client_distribution_history
       WHERE alias = ?
-      ${hasSearch ? 'AND (CAST(member_id AS TEXT) LIKE ? OR LOWER(cycle_name) LIKE ? OR LOWER(collected_by) LIKE ?)' : ''}
+      ${hasSearch ? 'AND (CAST(member_id AS TEXT) LIKE ? OR LOWER(cycle_name) LIKE ? OR LOWER(collected_by) LIKE ? OR LOWER(COALESCE(collected_by_document, \'\')) LIKE ?)' : ''}
       `,
-      ...(hasSearch ? [alias, searchPattern, searchPattern, searchPattern] : [alias])
+      ...(hasSearch
+        ? [alias, searchPattern, searchPattern, searchPattern, searchPattern]
+        : [alias])
     );
     const total = asNumber(totalRow?.count);
 
@@ -1759,6 +1946,9 @@ export function createEligibleDataService(db: Database): EligibleDataService {
         cycleCode: number;
         cycleName: string;
         collectedBy: string;
+        collectedByDocument: string | null;
+        quantity: number;
+        notes: string | null;
         createdAt: string;
       }>
     >(
@@ -1772,15 +1962,18 @@ export function createEligibleDataService(db: Database): EligibleDataService {
         cycle_code as cycleCode,
         cycle_name as cycleName,
         collected_by as collectedBy,
+        collected_by_document as collectedByDocument,
+        quantity as quantity,
+        notes as notes,
         created_at as createdAt
       FROM client_distribution_history
       WHERE alias = ?
-      ${hasSearch ? 'AND (CAST(member_id AS TEXT) LIKE ? OR LOWER(cycle_name) LIKE ? OR LOWER(collected_by) LIKE ?)' : ''}
+      ${hasSearch ? 'AND (CAST(member_id AS TEXT) LIKE ? OR LOWER(cycle_name) LIKE ? OR LOWER(collected_by) LIKE ? OR LOWER(COALESCE(collected_by_document, \'\')) LIKE ? OR LOWER(COALESCE(notes, \'\')) LIKE ?)' : ''}
       ORDER BY created_at DESC, id DESC
       LIMIT ? OFFSET ?
       `,
       ...(hasSearch
-        ? [alias, searchPattern, searchPattern, searchPattern, safePageSize, offset]
+        ? [alias, searchPattern, searchPattern, searchPattern, searchPattern, searchPattern, safePageSize, offset]
         : [alias, safePageSize, offset])
     );
 
@@ -1793,6 +1986,9 @@ export function createEligibleDataService(db: Database): EligibleDataService {
       cycleCode: asNumber(row.cycleCode),
       cycleName: asText(row.cycleName),
       collectedBy: asText(row.collectedBy),
+      collectedByDocument: asNullableText(row.collectedByDocument),
+      quantity: normalizeQuantity(row.quantity),
+      notes: asNullableText(row.notes),
       createdAt: asText(row.createdAt)
     }));
 

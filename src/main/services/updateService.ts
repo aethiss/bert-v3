@@ -1,6 +1,7 @@
 import { BrowserWindow, app, shell } from 'electron';
 import type { UpdaterPhase, UpdaterState } from '../../shared/types/ipc/updater';
 import { getEnvValue } from './envService';
+import type { AppLogService } from './logService';
 
 const UPDATE_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
 const UPDATER_STATE_CHANGED_CHANNEL = 'updater:stateChanged';
@@ -22,9 +23,29 @@ function normalizeVersion(version: string): string {
   return trimmed.toLowerCase().startsWith('v') ? trimmed : `v${trimmed}`;
 }
 
+function areVersionsEquivalent(firstVersion: string | null, secondVersion: string | null): boolean {
+  if (!firstVersion || !secondVersion) {
+    return false;
+  }
+
+  return normalizeVersion(firstVersion) === normalizeVersion(secondVersion);
+}
+
 function extractVersionFromMessage(message: string): string | null {
   const match = message.match(/v?\d+(?:\.\d+)+/i);
   return match?.[0] ?? null;
+}
+
+function markLoggedError(error: Error): Error {
+  Object.defineProperty(error, '__logged', {
+    value: true,
+    configurable: true
+  });
+  return error;
+}
+
+function isLoggedError(error: unknown): boolean {
+  return typeof error === 'object' && error !== null && '__logged' in error;
 }
 
 function resolveApiBase(): string {
@@ -70,11 +91,13 @@ export interface UpdateService {
 
 export interface UpdateServiceOptions {
   getPendingDistributionCount: () => Promise<number>;
+  logService: AppLogService;
 }
 
 export function createUpdateService(options: UpdateServiceOptions): UpdateService {
   const listeners = new Set<(state: UpdaterState) => void>();
   const currentVersion = app.getVersion();
+  const { logService } = options;
 
   let phase: UpdaterPhase = 'idle';
   let availableVersion: string | null = null;
@@ -141,6 +164,60 @@ export function createUpdateService(options: UpdateServiceOptions): UpdateServic
     return state;
   }
 
+  async function fetchJsonWithNetworkLogging(params: {
+    scope: string;
+    url: string;
+    token: string;
+    failureMessage: string;
+  }): Promise<string> {
+    const startedAt = Date.now();
+    try {
+      const response = await fetch(params.url, {
+        method: 'GET',
+        headers: {
+          authorization: `Bearer ${params.token}`,
+          accept: 'application/json'
+        }
+      });
+
+      const rawBody = await response.text();
+      const durationMs = Date.now() - startedAt;
+
+      if (!response.ok) {
+        await logService.logNetwork({
+          scope: params.scope,
+          method: 'GET',
+          url: params.url,
+          ok: false,
+          status: response.status,
+          statusText: response.statusText,
+          durationMs,
+          responseBodyPreview: rawBody.slice(0, 500),
+          errorMessage: params.failureMessage
+        });
+        throw markLoggedError(
+          new Error(`${params.failureMessage} (${response.status} ${response.statusText}). ${rawBody.slice(0, 200)}`)
+        );
+      }
+
+      await logService.logNetwork({
+        scope: params.scope,
+        method: 'GET',
+        url: params.url,
+        ok: true,
+        status: response.status,
+        durationMs
+      });
+
+      return rawBody;
+    } catch (error) {
+      if (!isLoggedError(error)) {
+        await logService.logError(params.scope, error);
+      }
+      throw error;
+    }
+  }
+
   function start(): void {
     if (started) {
       return;
@@ -182,41 +259,44 @@ export function createUpdateService(options: UpdateServiceOptions): UpdateServic
 
     try {
       const url = resolveCheckVersionUrl(currentVersion);
-      const response = await fetch(url, {
-        method: 'GET',
-        headers: {
-          authorization: `Bearer ${token}`,
-          accept: 'application/json'
-        }
+      const rawBody = await fetchJsonWithNetworkLogging({
+        scope: 'updater:checkForUpdates',
+        url,
+        token,
+        failureMessage: 'Version check failed'
       });
-
-      const rawBody = await response.text();
-      if (!response.ok) {
-        throw new Error(`Version check failed (${response.status} ${response.statusText}). ${rawBody.slice(0, 200)}`);
-      }
 
       let payload: { message?: string };
       try {
         payload = JSON.parse(rawBody) as { message?: string };
       } catch {
-        throw new Error('Version check returned an invalid JSON response.');
+        await logService.logError('updater:checkForUpdates', 'Version check returned an invalid JSON response.', {
+          bodyPreview: rawBody.slice(0, 500),
+          url
+        });
+        throw markLoggedError(new Error('Version check returned an invalid JSON response.'));
       }
 
       const message = (payload.message ?? '').trim();
       releaseNotes = message || null;
+      const extractedVersion = extractVersionFromMessage(message);
+      const hasMatchingVersion = areVersionsEquivalent(extractedVersion, currentVersion);
 
-      if (message.toLowerCase() === 'you are using the last version') {
+      if (message.toLowerCase() === 'you are using the last version' || hasMatchingVersion) {
         phase = 'idle';
-        availableVersion = null;
+        availableVersion = extractedVersion;
         downloadedVersion = null;
       } else {
         phase = 'available';
-        availableVersion = extractVersionFromMessage(message);
+        availableVersion = extractedVersion;
         downloadedVersion = null;
       }
 
       return publishState();
     } catch (error) {
+      if (!isLoggedError(error)) {
+        await logService.logError('updater:checkForUpdates', error);
+      }
       phase = 'error';
       lastError = formatError(error);
       await publishState();
@@ -240,29 +320,35 @@ export function createUpdateService(options: UpdateServiceOptions): UpdateServic
 
     try {
       const url = resolveLatestVersionUrl();
-      const response = await fetch(url, {
-        method: 'GET',
-        headers: {
-          authorization: `Bearer ${token}`,
-          accept: 'application/json'
-        }
+      const rawBody = await fetchJsonWithNetworkLogging({
+        scope: 'updater:downloadUpdate',
+        url,
+        token,
+        failureMessage: 'Latest version request failed'
       });
-
-      const rawBody = await response.text();
-      if (!response.ok) {
-        throw new Error(`Latest version request failed (${response.status} ${response.statusText}). ${rawBody.slice(0, 200)}`);
-      }
 
       let payload: { download_url?: string };
       try {
         payload = JSON.parse(rawBody) as { download_url?: string };
       } catch {
-        throw new Error('Latest version API returned an invalid JSON response.');
+        await logService.logError(
+          'updater:downloadUpdate',
+          'Latest version API returned an invalid JSON response.',
+          {
+            bodyPreview: rawBody.slice(0, 500),
+            url
+          }
+        );
+        throw markLoggedError(new Error('Latest version API returned an invalid JSON response.'));
       }
 
       const downloadUrl = payload.download_url?.trim();
       if (!downloadUrl) {
-        throw new Error('Latest version API returned an empty download_url.');
+        await logService.logError('updater:downloadUpdate', 'Latest version API returned an empty download_url.', {
+          bodyPreview: rawBody.slice(0, 500),
+          url
+        });
+        throw markLoggedError(new Error('Latest version API returned an empty download_url.'));
       }
 
       await shell.openExternal(downloadUrl);
@@ -270,6 +356,9 @@ export function createUpdateService(options: UpdateServiceOptions): UpdateServic
       downloadedVersion = availableVersion;
       return publishState();
     } catch (error) {
+      if (!isLoggedError(error)) {
+        await logService.logError('updater:downloadUpdate', error);
+      }
       phase = 'available';
       lastError = formatError(error);
       await publishState();

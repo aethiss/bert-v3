@@ -8,6 +8,7 @@ export interface ClientRouteState {
   section: ClientSection;
   distributionMode: ClientDistributionMode;
   configurationTab: ClientConfigurationTab;
+  distributionLookup?: string | null;
 }
 
 export interface ClientRouteComponentProps {

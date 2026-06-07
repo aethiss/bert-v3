@@ -17,6 +17,7 @@ interface ServerPageProps {
   isSynchronizing: boolean;
   isSynchronizeDisabled: boolean;
   onSynchronize: () => void;
+  onAuthExpired: () => Promise<void> | void;
   pendingDistributionCount: number;
   userEmail: string;
   isOnline: boolean;
@@ -34,6 +35,7 @@ export function ServerPage({
   isSynchronizing,
   isSynchronizeDisabled,
   onSynchronize,
+  onAuthExpired,
   pendingDistributionCount,
   userEmail,
   isOnline,
@@ -67,15 +69,23 @@ export function ServerPage({
     }
 
     if (route.section === 'operations') {
-      return <Operations />;
+      return <Operations route={route} onNavigate={onNavigate} />;
     }
 
-    return <Data pendingDistributionCount={pendingDistributionCount} />;
+    return (
+      <Data
+        pendingDistributionCount={pendingDistributionCount}
+        isSynchronizing={isSynchronizing}
+        onSynchronize={onSynchronize}
+        onAuthExpired={onAuthExpired}
+      />
+    );
   }, [
     hasEligibleData,
     isOnline,
     isSynchronizeDisabled,
     isSynchronizing,
+    onAuthExpired,
     onNavigate,
     onSynchronize,
     pendingDistributionCount,
@@ -100,7 +110,8 @@ export function ServerPage({
           onSelect={(section) => {
             onNavigate({
               ...route,
-              section
+              section,
+              distributionLookup: null
             });
           }}
         />

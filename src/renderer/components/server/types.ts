@@ -8,6 +8,7 @@ export interface ServerRouteState {
   section: ServerSection;
   distributionMode: DistributionMode;
   configurationTab: ConfigurationTab;
+  distributionLookup?: string | null;
 }
 
 export interface ServerRouteComponentProps {

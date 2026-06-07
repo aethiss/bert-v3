@@ -3,7 +3,7 @@ import type {
   DistributionDetailData,
   DistributionSearchResult
 } from '@shared/types/eligible';
-import type { ClientConnectionSettings } from '@shared/types/localServer';
+import type { ClientConnectionSettings, ClientLoginResponse } from '@shared/types/localServer';
 import { logNetwork } from './configService';
 
 export interface ClientSession {
@@ -11,6 +11,9 @@ export interface ClientSession {
   alias: string;
   host: string;
   expiresAt: string;
+  serverVersion: string;
+  fdpCode: string | null;
+  fieldOffice: string | null;
 }
 
 interface LocalServerErrorPayload {
@@ -136,12 +139,15 @@ export async function loginToLocalServer(settings: ClientConnectionSettings): Pr
     })
   });
 
-  const parsed = await parseResponse<{ accessToken: string; expiresAt: string; alias: string }>(response);
+  const parsed = await parseResponse<ClientLoginResponse>(response);
   return {
     accessToken: parsed.data.accessToken,
     alias: parsed.data.alias,
     expiresAt: parsed.data.expiresAt,
-    host: `${settings.serverIp.trim()}:${settings.serverPort}`
+    host: `${settings.serverIp.trim()}:${settings.serverPort}`,
+    serverVersion: parsed.data.serverVersion,
+    fdpCode: parsed.data.fdpCode,
+    fieldOffice: parsed.data.fieldOffice
   };
 }
 

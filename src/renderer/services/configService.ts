@@ -13,6 +13,10 @@ export async function getAppVersion(): Promise<string> {
   return window.bertApp.config.getAppVersion();
 }
 
+export async function getDeviceMacAddress(): Promise<string | null> {
+  return window.bertApp.config.getDeviceMacAddress();
+}
+
 export async function getPrintSettings(): Promise<PrintSettings> {
   return window.bertApp.config.getPrintSettings();
 }

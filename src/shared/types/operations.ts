@@ -28,9 +28,10 @@ export interface OperationClientStat {
 export interface OperationDistributionRow {
   id: number;
   subOperator: string;
-  memberId: number;
+  familyUniqueCode: number;
+  documentNumber: string | null;
   date: string;
-  time: string;
+  notes: string | null;
   cycleCode: number;
   cycleName: string;
   status: string;

@@ -416,10 +416,6 @@ main {
   white-space: nowrap;
 }
 
-.server-status.ready svg {
-  color: #12a150;
-}
-
 .server-status.offline svg {
   color: #6b7280;
 }
@@ -493,10 +489,6 @@ main {
   font-size: 16px;
   color: #6b7280;
   font-weight: 400;
-}
-
-.overview-sync-stats {
-  font-weight: 500;
 }
 
 .server-divider {
@@ -932,11 +924,6 @@ main {
 
 .distribution-history-table th:nth-child(4),
 .distribution-history-table td:nth-child(4) {
-  width: 90px;
-}
-
-.distribution-history-table th:nth-child(5),
-.distribution-history-table td:nth-child(5) {
   width: 130px;
 }
 
@@ -1073,6 +1060,18 @@ main {
   margin-left: 4px;
 }
 
+.receipt-row-value-receipt-id {
+  word-break: break-word;
+}
+
+.receipt-row-value-receipt-id-prefix {
+  white-space: normal;
+}
+
+.receipt-row-value-receipt-id-sequence {
+  white-space: nowrap;
+}
+
 .receipt-separator {
   font-size: 10px;
   font-weight: 700;
@@ -1105,22 +1104,18 @@ main {
   border-bottom: 1px solid #d1d5db;
 }
 
-.receipt-commodity-row {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 12px;
+.receipt-commodity-summary {
+  margin-top: 2px;
+  line-height: 1.35;
+  word-break: break-word;
 }
 
 .receipt-commodity-name {
-  flex: 1;
-  min-width: 0;
+  white-space: normal;
 }
 
-.receipt-commodity-qty {
-  text-align: right;
-  white-space: nowrap;
-  font-weight: 600;
+.receipt-commodity-details {
+  white-space: normal;
 }
 
 .receipt-footer {
@@ -1146,6 +1141,18 @@ main {
   width: 140mm;
   padding: 2px;
   margin: 20px auto;
+}
+
+.receipt-58 .receipt-row-value-receipt-id {
+  font-size: 8px;
+}
+
+.receipt-80 .receipt-row-value-receipt-id {
+  font-size: 10px;
+}
+
+.receipt-a5 .receipt-row-value-receipt-id {
+  font-size: 14px;
 }
 
 .receipt-header-a5 {
@@ -1391,6 +1398,13 @@ main {
   font-weight: 500;
 }
 
+.data-syncing-message {
+  margin: 6px 0 0;
+  color: #0f6ea5;
+  font-size: 13px;
+  font-weight: 500;
+}
+
 .data-export-title {
   margin: 0 0 12px;
   font-size: 28px;
@@ -1584,6 +1598,14 @@ main {
   padding: 9px 10px;
   font-size: 13px;
   color: #2f3136;
+}
+
+.operations-row-clickable {
+  cursor: pointer;
+}
+
+.operations-row-clickable:hover {
+  background: rgba(226, 232, 240, 0.65);
 }
 
 .operations-table th {

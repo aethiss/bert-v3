@@ -45,6 +45,19 @@ function formatBytes(value: number | null): string | null {
   return `${amount.toFixed(amount >= 10 || exponent === 0 ? 0 : 1)} ${units[exponent]}`;
 }
 
+function normalizeVersion(version: string | null): string {
+  if (!version) {
+    return '';
+  }
+
+  const trimmed = version.trim();
+  if (!trimmed) {
+    return '';
+  }
+
+  return trimmed.toLowerCase().startsWith('v') ? trimmed : `v${trimmed}`;
+}
+
 export function UpdateSettings() {
   const intl = useIntl();
   const jwt = useAppSelector(selectJwt);
@@ -176,6 +189,13 @@ export function UpdateSettings() {
     return null;
   }, [state]);
 
+  const isLoggedIn = Boolean(jwt?.trim());
+  const currentVersion = state?.currentVersion ?? null;
+  const availableVersion = state?.availableVersion ?? null;
+  const hasMatchingVersion =
+    Boolean(currentVersion && availableVersion) &&
+    normalizeVersion(currentVersion) === normalizeVersion(availableVersion);
+
   const statusLabel = state
     ? intl.formatMessage({ id: `updater.status.${state.phase}` })
     : intl.formatMessage({ id: 'common.loading' });
@@ -184,6 +204,13 @@ export function UpdateSettings() {
     <div className="configuration-form">
       <p className="server-form-label">{intl.formatMessage({ id: 'updater.title' })}</p>
       <p className="server-form-muted">{intl.formatMessage({ id: 'updater.description' })}</p>
+
+      {!isLoggedIn ? (
+        <div className="server-form-display">
+          <p className="server-form-label">{intl.formatMessage({ id: 'updater.loginRequiredTitle' })}</p>
+          <p className="server-form-muted">{intl.formatMessage({ id: 'updater.authRequired' })}</p>
+        </div>
+      ) : null}
 
       <div className="server-form-display">
         <p className="server-form-label">{intl.formatMessage({ id: 'updater.currentVersion' })}</p>
@@ -262,7 +289,7 @@ export function UpdateSettings() {
         <Button
           className="server-btn server-start-btn"
           onClick={() => void handleCheckForUpdates()}
-          disabled={!state || !jwt || !state.canCheck || isChecking || isDownloading || isInstalling}
+          disabled={!state || !isLoggedIn || !state.canCheck || isChecking || isDownloading || isInstalling}
         >
           {isChecking
             ? intl.formatMessage({ id: 'updater.checkingButton' })
@@ -272,7 +299,15 @@ export function UpdateSettings() {
         <Button
           className="server-btn server-start-btn"
           onClick={() => void handleDownloadUpdate()}
-          disabled={!state || !jwt || !state.canDownload || isDownloading || isChecking || isInstalling}
+          disabled={
+            !state ||
+            !isLoggedIn ||
+            !state.canDownload ||
+            hasMatchingVersion ||
+            isDownloading ||
+            isChecking ||
+            isInstalling
+          }
         >
           {isDownloading
             ? intl.formatMessage({ id: 'updater.downloadingButton' })
@@ -282,7 +317,7 @@ export function UpdateSettings() {
         <Button
           className="server-btn server-start-btn"
           onClick={() => void handleInstallUpdate()}
-          disabled={!state || !state.canInstall || isInstalling || isChecking || isDownloading}
+          disabled={!state || !state.canInstall || hasMatchingVersion || isInstalling || isChecking || isDownloading}
         >
           {isInstalling
             ? intl.formatMessage({ id: 'updater.installingButton' })

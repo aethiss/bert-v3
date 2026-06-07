@@ -12,6 +12,7 @@ import type { RuntimeConfigService } from '../services/configService';
 import type { LocalApiServer } from '../server/localApiServer';
 import type { EligibleDataService } from '../services/eligibleDataService';
 import type { AppLogService } from '../services/logService';
+import { getDeviceMacAddress } from '../utils/deviceInfo';
 
 const CHANNEL_GET_PRINT_SETTINGS = 'config:getPrintSettings';
 const CHANNEL_SET_PRINT_SETTINGS = 'config:setPrintSettings';
@@ -28,6 +29,7 @@ const CHANNEL_GET_CLIENT_CONNECTION_SETTINGS = 'config:getClientConnectionSettin
 const CHANNEL_SET_CLIENT_CONNECTION_SETTINGS = 'config:setClientConnectionSettings';
 const CHANNEL_RESET_DATABASE_FOR_DEVELOPMENT = 'config:resetDatabaseForDevelopment';
 const CHANNEL_GET_APP_VERSION = 'config:getAppVersion';
+const CHANNEL_GET_DEVICE_MAC_ADDRESS = 'config:getDeviceMacAddress';
 
 function listLocalInterfaces(): LocalServerInterfaceInfo[] {
   const all = networkInterfaces();
@@ -82,6 +84,7 @@ export function registerConfigIpc(
   ipcMain.removeHandler(CHANNEL_SET_CLIENT_CONNECTION_SETTINGS);
   ipcMain.removeHandler(CHANNEL_RESET_DATABASE_FOR_DEVELOPMENT);
   ipcMain.removeHandler(CHANNEL_GET_APP_VERSION);
+  ipcMain.removeHandler(CHANNEL_GET_DEVICE_MAC_ADDRESS);
 
   ipcMain.handle(CHANNEL_GET_PRINT_SETTINGS, async () => {
     return configService.getPrintSettings();
@@ -151,6 +154,10 @@ export function registerConfigIpc(
 
   ipcMain.handle(CHANNEL_GET_APP_VERSION, async () => {
     return app.getVersion();
+  });
+
+  ipcMain.handle(CHANNEL_GET_DEVICE_MAC_ADDRESS, async () => {
+    return getDeviceMacAddress();
   });
 
   ipcMain.handle(

@@ -30,6 +30,7 @@ const BASE_MIGRATIONS: string[] = [
     quantity INTEGER NOT NULL DEFAULT 1,
     app_signature TEXT NOT NULL,
     notes TEXT,
+    device_mac_address TEXT NOT NULL DEFAULT '',
     status TEXT NOT NULL DEFAULT 'pending_local',
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
   );
@@ -60,6 +61,8 @@ const BASE_MIGRATIONS: string[] = [
     cycle_code INTEGER NOT NULL,
     cycle_name TEXT NOT NULL,
     collected_by TEXT NOT NULL,
+    collected_by_document TEXT,
+    quantity INTEGER NOT NULL DEFAULT 1,
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
   );
   `,
@@ -102,6 +105,7 @@ const ELIGIBLE_CACHE_SCHEMA: string[] = [
     address TEXT,
     status TEXT NOT NULL,
     eligible INTEGER NOT NULL DEFAULT 0,
+    principle_family_booklet TEXT,
     fdp_id TEXT NOT NULL,
     fdp_name TEXT NOT NULL,
     children_6_23_months INTEGER NOT NULL DEFAULT 0,
@@ -225,6 +229,12 @@ async function ensureDistributionQueueSchema(db: Database): Promise<void> {
   if (!hasQuantity) {
     await db.exec('ALTER TABLE distribution_queue ADD COLUMN quantity INTEGER NOT NULL DEFAULT 1');
   }
+  const hasDeviceMacAddress = columns.some((column) => column.name === 'device_mac_address');
+  if (!hasDeviceMacAddress) {
+    await db.exec(
+      "ALTER TABLE distribution_queue ADD COLUMN device_mac_address TEXT NOT NULL DEFAULT ''"
+    );
+  }
 }
 
 async function ensureSyncedDistributionHistorySchema(db: Database): Promise<void> {
@@ -247,6 +257,42 @@ async function ensureSyncedDistributionHistorySchema(db: Database): Promise<void
   const hasCollectedByFatherName = columns.some((column) => column.name === 'collected_by_father_name');
   if (!hasCollectedByFatherName) {
     await db.exec('ALTER TABLE synced_distribution_history ADD COLUMN collected_by_father_name TEXT');
+  }
+}
+
+async function ensureFamiliesSchema(db: Database): Promise<void> {
+  const columns = await db.all<Array<{ name: string }>>('PRAGMA table_info(families)');
+  if (columns.length === 0) {
+    return;
+  }
+
+  const hasPrincipleFamilyBooklet = columns.some((column) => column.name === 'principle_family_booklet');
+  if (!hasPrincipleFamilyBooklet) {
+    await db.exec('ALTER TABLE families ADD COLUMN principle_family_booklet TEXT');
+  }
+}
+
+async function ensureClientDistributionHistorySchema(db: Database): Promise<void> {
+  const columns = await db.all<Array<{ name: string }>>(
+    'PRAGMA table_info(client_distribution_history)'
+  );
+  if (columns.length === 0) {
+    return;
+  }
+
+  const hasCollectedByDocument = columns.some((column) => column.name === 'collected_by_document');
+  if (!hasCollectedByDocument) {
+    await db.exec('ALTER TABLE client_distribution_history ADD COLUMN collected_by_document TEXT');
+  }
+
+  const hasQuantity = columns.some((column) => column.name === 'quantity');
+  if (!hasQuantity) {
+    await db.exec('ALTER TABLE client_distribution_history ADD COLUMN quantity INTEGER NOT NULL DEFAULT 1');
+  }
+
+  const hasNotes = columns.some((column) => column.name === 'notes');
+  if (!hasNotes) {
+    await db.exec('ALTER TABLE client_distribution_history ADD COLUMN notes TEXT');
   }
 }
 
@@ -322,7 +368,9 @@ export async function runMigrations(db: Database): Promise<void> {
     await ensureUserTableSchema(db);
     await ensureDistributionQueueSchema(db);
     await ensureEligibleCacheSchema(db);
+    await ensureFamiliesSchema(db);
     await ensureSyncedDistributionHistorySchema(db);
+    await ensureClientDistributionHistorySchema(db);
     await db.exec('COMMIT');
   } catch (error) {
     await db.exec('ROLLBACK');

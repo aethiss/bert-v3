@@ -89,7 +89,8 @@ async function bootstrap(): Promise<void> {
   const userService = createUserService(appDatabase.connection);
   const eligibleDataService = createEligibleDataService(appDatabase.connection);
   const updateService = createUpdateService({
-    getPendingDistributionCount: () => eligibleDataService.getPendingDistributionCount()
+    getPendingDistributionCount: () => eligibleDataService.getPendingDistributionCount(),
+    logService
   });
   const localApiServer = createLocalApiServer({ eligibleDataService });
   registerLogIpc(logService);

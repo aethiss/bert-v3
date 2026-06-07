@@ -7,6 +7,7 @@ import { setOnlineAuthSession } from '@renderer/store/authSlice';
 import { Button } from '@ui/components/ui/button';
 import { isRtkLikeError, toErrorMessage } from '@renderer/lib/errorMessage';
 import { showErrorToast } from '@renderer/lib/errorToast';
+import { checkForUpdatesAfterLogin } from '@renderer/services/updaterService';
 import wfpLogoEmblemWhite from '@renderer/assets/branding/wfp-logo-emblem-white-all.svg';
 
 export function LoginPage() {
@@ -61,6 +62,8 @@ export function LoginPage() {
           user: profile
         })
       );
+
+      void checkForUpdatesAfterLogin(jwt);
     } catch (error: unknown) {
       console.error('[login] Login flow failed', error);
       const message = toErrorMessage(error);

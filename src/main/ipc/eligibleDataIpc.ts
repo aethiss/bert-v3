@@ -28,6 +28,33 @@ const CHANNEL_PUSH_DISTRIBUTION_QUEUE = 'eligibleData:pushDistributionQueue';
 const CHANNEL_GET_FAMILY_DISTRIBUTION_HISTORY = 'eligibleData:getFamilyDistributionHistory';
 const CHANNEL_SAVE_CLIENT_DISTRIBUTION_HISTORY = 'eligibleData:saveClientDistributionHistory';
 const CHANNEL_GET_CLIENT_DISTRIBUTION_HISTORY = 'eligibleData:getClientDistributionHistory';
+const AUTH_EXPIRED_ERROR_PREFIX = 'AUTH_EXPIRED:';
+
+function isAuthExpiredResponse(status: number, body: string): boolean {
+  if (status === 401 || status === 403) {
+    return true;
+  }
+
+  return /expired|unauthori[sz]ed|forbidden|invalid token|jwt/i.test(body);
+}
+
+function createAuthExpiredError(): Error {
+  return new Error(
+    `${AUTH_EXPIRED_ERROR_PREFIX} Your login session expired. Please log in again before using Push Distribution.`
+  );
+}
+
+function markLoggedError(error: Error): Error {
+  Object.defineProperty(error, '__logged', {
+    value: true,
+    configurable: true
+  });
+  return error;
+}
+
+function isLoggedError(error: unknown): boolean {
+  return typeof error === 'object' && error !== null && '__logged' in error;
+}
 
 function resolveEligibleMembersUrl(fdpCode: string): string {
   const apiBase = getEnvValue('RENDERER_VITE_API_URL') ?? getEnvValue('VITE_API_URL');
@@ -38,7 +65,7 @@ function resolveEligibleMembersUrl(fdpCode: string): string {
   const endpointPath =
     getEnvValue('RENDERER_VITE_ELIGIBLE_MEMBERS_PATH') ??
     getEnvValue('VITE_ELIGIBLE_MEMBERS_PATH') ??
-    '/api/v1/active-cycles-householdsv5/';
+    '/api/v1/active-cycles-householdsv6/';
 
   const normalizedPath = endpointPath.endsWith('/') ? endpointPath : `${endpointPath}/`;
   const url = new URL(`${normalizedPath}${fdpCode}`, apiBase);
@@ -164,7 +191,8 @@ export function registerEligibleDataIpc(
             subOperator: row.subOperator ?? '',
             quantity: row.quantity,
             appSignature: row.appSignature,
-            note: row.notes ?? ''
+            note: row.notes ?? '',
+            deviceMacAddress: row.deviceMacAddress ?? ''
           }));
           const startedAt = Date.now();
           const response = await fetch(endpointUrl, {
@@ -192,9 +220,13 @@ export function registerEligibleDataIpc(
               responseBodyPreview: rawBody.slice(0, 700),
               errorMessage: 'Bulk distribution push failed'
             });
-            throw new Error(
-              `Bulk distribution push failed (${response.status} ${response.statusText}). ${rawBody.slice(0, 200)}`
-            );
+            const authExpired = isAuthExpiredResponse(response.status, rawBody);
+            const error = authExpired
+              ? markLoggedError(createAuthExpiredError())
+              : new Error(
+                  `Bulk distribution push failed (${response.status} ${response.statusText}). ${rawBody.slice(0, 200)}`
+                );
+            throw error;
           }
 
           await logService.logNetwork({
@@ -291,7 +323,9 @@ export function registerEligibleDataIpc(
           totalDeletedLocalRows
         };
       } catch (error) {
-        await logService.logError('eligibleData:pushDistributionQueue', error);
+        if (!isLoggedError(error)) {
+          await logService.logError('eligibleData:pushDistributionQueue', error);
+        }
         throw error;
       }
     }
@@ -345,9 +379,13 @@ export function registerEligibleDataIpc(
             responseBodyPreview: rawBody.slice(0, 500),
             errorMessage: 'Eligible members request failed'
           });
-          throw new Error(
-            `Eligible members request failed for ${url} (${response.status} ${response.statusText}): ${rawBody.slice(0, 180)}`
-          );
+          const authExpired = isAuthExpiredResponse(response.status, rawBody);
+          const error = authExpired
+            ? markLoggedError(createAuthExpiredError())
+            : new Error(
+                `Eligible members request failed for ${url} (${response.status} ${response.statusText}): ${rawBody.slice(0, 180)}`
+              );
+          throw error;
         }
 
         await logService.logNetwork({
@@ -362,7 +400,9 @@ export function registerEligibleDataIpc(
         const payload = JSON.parse(rawBody) as EligibleMembersApiResponse;
         return eligibleDataService.saveEligibleMembers(payload);
       } catch (error) {
-        await logService.logError('eligibleData:sync', error);
+        if (!isLoggedError(error)) {
+          await logService.logError('eligibleData:sync', error);
+        }
         throw error;
       }
     }

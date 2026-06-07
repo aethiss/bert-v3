@@ -72,6 +72,9 @@ const bertAppApi: BertAppApi = {
     getAppVersion() {
       return ipcRenderer.invoke('config:getAppVersion') as Promise<string>;
     },
+    getDeviceMacAddress() {
+      return ipcRenderer.invoke('config:getDeviceMacAddress') as Promise<string | null>;
+    },
     getPrintSettings() {
       return ipcRenderer.invoke('config:getPrintSettings') as Promise<PrintSettings>;
     },

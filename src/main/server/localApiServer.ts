@@ -1,5 +1,6 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import { randomBytes } from 'node:crypto';
+import { app } from 'electron';
 import type { ClientDistributionInput } from '../../shared/types/eligible';
 import type {
   LocalServerClientPresence,
@@ -172,6 +173,7 @@ export function createLocalApiServer(deps: LocalApiServerDependencies): LocalApi
 
       const token = createAccessToken();
       const expiresAt = Date.now() + ACCESS_TOKEN_TTL_MS;
+      const overview = await deps.eligibleDataService.getOverviewSummary();
       sessions.set(token, {
         alias,
         expiresAt,
@@ -182,7 +184,10 @@ export function createLocalApiServer(deps: LocalApiServerDependencies): LocalApi
         accessToken: token,
         tokenType: 'Bearer',
         expiresAt: new Date(expiresAt).toISOString(),
-        alias
+        alias,
+        serverVersion: app.getVersion(),
+        fdpCode: overview.fdpCode ?? null,
+        fieldOffice: overview.fdpName ?? null
       });
       return;
     }
@@ -217,21 +222,63 @@ export function createLocalApiServer(deps: LocalApiServerDependencies): LocalApi
     if (method === 'POST' && url.pathname === '/distribution') {
       const body = (await readJsonBody(req)) as {
         subOperator?: unknown;
+        familyUniqueCode?: unknown;
         cycleCode?: unknown;
         memberId?: unknown;
+        notes?: unknown;
+        deviceMacAddress?: unknown;
       };
 
       const subOperator = typeof body.subOperator === 'string' ? body.subOperator.trim() : '';
+      const familyUniqueCode =
+        typeof body.familyUniqueCode === 'number' ? body.familyUniqueCode : NaN;
       const cycleCode = typeof body.cycleCode === 'number' ? body.cycleCode : NaN;
       const memberId = typeof body.memberId === 'number' ? body.memberId : NaN;
+      const notes = typeof body.notes === 'string' ? body.notes.trim() : '';
+      const deviceMacAddress =
+        typeof body.deviceMacAddress === 'string' ? body.deviceMacAddress.trim() : '';
+
+      if (!Number.isFinite(familyUniqueCode)) {
+        sendJson(res, 400, { error: 'Missing or invalid familyUniqueCode.' });
+        return;
+      }
 
       const payload: ClientDistributionInput = {
         subOperator: subOperator || session.alias,
+        familyUniqueCode,
         cycleCode,
-        memberId
+        memberId,
+        notes: notes || null,
+        deviceMacAddress
       };
 
       const saved = await deps.eligibleDataService.saveClientDistribution(payload);
+      const detail = await deps.eligibleDataService.getDistributionDetail({
+        memberId,
+        familyUniqueCode
+      });
+      const cycle = detail?.activeCycles.find((item) => item.cycleCode === cycleCode) ?? null;
+      const member = detail?.members.find((item) => item.memberId === memberId) ?? null;
+
+      if (cycle) {
+        await deps.eligibleDataService
+          .saveClientDistributionHistory({
+            alias: session.alias,
+            host,
+            memberId,
+            familyUniqueCode,
+            cycleCode,
+            cycleName: cycle.cycleName,
+            collectedBy: member?.fullName ?? session.alias,
+            collectedByDocument: member?.documentNumber ?? null,
+            quantity: Number(cycle.quantity) || 1,
+            notes: notes || null
+          })
+          .catch((error) => {
+            console.error('Failed to persist client distribution history.', error);
+          });
+      }
+
       sendJson(res, 201, {
         ok: true,
         distributionId: saved.id,

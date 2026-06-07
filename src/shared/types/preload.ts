@@ -50,6 +50,7 @@ export interface BertAppApi {
   };
   config: {
     getAppVersion(): Promise<string>;
+    getDeviceMacAddress(): Promise<string | null>;
     getPrintSettings(): Promise<PrintSettings>;
     setPrintSettings(settings: PrintSettings): Promise<PrintSettings>;
     getLanguage(): Promise<SupportedLocale>;

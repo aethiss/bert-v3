@@ -17,18 +17,16 @@ import {
   saveDistributionEvent,
   searchDistributionMember
 } from '@renderer/services/eligibleDataService';
-import { getPrintSettings } from '@renderer/services/configService';
+import { getDeviceMacAddress, getPrintSettings } from '@renderer/services/configService';
 import { showErrorToast } from '@renderer/lib/errorToast';
 import { useAppSelector } from '@renderer/store/hooks';
 import { selectCurrentUser } from '@renderer/store/selectors/authSelectors';
 import { selectEligibleOverviewSummary } from '@renderer/store/selectors/eligibleSelectors';
 import { DistributionPrintPreview } from '@renderer/components/server/prints/DistributionPrintPreview';
 import type { ReceiptPayload } from '@renderer/components/server/prints/types';
+import { buildReceiptPayload } from '@renderer/components/server/prints/receiptBuilders';
 
-function isPrincipleRole(role: string | null): boolean {
-  const normalized = (role ?? '').trim().toLowerCase();
-  return normalized === 'principle' || normalized === 'principal';
-}
+const DISTRIBUTION_LOOKUP_STORAGE_KEY = 'bert.operations.distributionLookup';
 
 function asAgeLabel(age: number | null, fallback: string): string {
   return typeof age === 'number' ? String(age) : fallback;
@@ -40,16 +38,6 @@ function isMemberEligibleForDistribution(age: number | null): boolean {
 
 function hasUsableDocumentId(documentNumber: string | null): boolean {
   return Boolean(documentNumber?.trim());
-}
-
-function buildCollectorDisplayName(parts: {
-  firstName?: string | null;
-  lastName?: string | null;
-  fatherName?: string | null;
-  fallback?: string;
-}): string {
-  const value = `${parts.firstName ?? ''} ${parts.lastName ?? ''} ${parts.fatherName ?? ''}`.trim();
-  return value || (parts.fallback ?? '');
 }
 
 function parseQuantity(value: string | null | undefined): number {
@@ -95,6 +83,8 @@ export function Distribution({ route, onNavigate }: ServerRouteComponentProps) {
   const scanTimerRef = useRef<number | null>(null);
 
   const filteredMembers = detail?.members ?? [];
+  const hasAssignableCycle = Boolean(detail?.activeCycles.some((cycle) => !cycle.isDistributed));
+  const isMemberSelectionDisabled = !hasAssignableCycle;
 
   const selectedMember = (() => {
     return filteredMembers.find((member) => member.memberId === selectedMemberId) ?? null;
@@ -229,6 +219,104 @@ export function Distribution({ route, onNavigate }: ServerRouteComponentProps) {
     }
   };
 
+  useEffect(() => {
+    const storedLookup = window.sessionStorage.getItem(DISTRIBUTION_LOOKUP_STORAGE_KEY);
+    const lookup = route.distributionLookup?.trim() || storedLookup?.trim();
+    if (!lookup || route.distributionMode === 'detail' || route.section !== 'distribution') {
+      return;
+    }
+
+    let cancelled = false;
+
+    const openLookup = async () => {
+      setQuery(lookup);
+      setIsSearching(true);
+      setBlockingMessage(null);
+      try {
+        const searchResult = await searchDistributionMember(lookup);
+        if (cancelled) {
+          return;
+        }
+
+        setResult(searchResult);
+        setHasSearched(true);
+
+        if (!searchResult) {
+          toast.error(intl.formatMessage({ id: 'common.error' }), {
+            description: intl.formatMessage({ id: 'distribution.emptySearch' })
+          });
+          onNavigate({
+            ...route,
+            section: 'distribution',
+            distributionMode: 'search'
+          });
+          return;
+        }
+
+        const detailData = await getDistributionDetail({
+          memberId: searchResult.member.id,
+          familyUniqueCode: searchResult.member.familyUniqueCode
+        });
+
+        if (cancelled) {
+          return;
+        }
+
+        if (!detailData) {
+          toast.error(intl.formatMessage({ id: 'common.error' }), {
+            description: intl.formatMessage({ id: 'distribution.loadDetailError' })
+          });
+          onNavigate({
+            ...route,
+            section: 'distribution',
+            distributionMode: 'result'
+          });
+          return;
+        }
+
+        const defaultCycle =
+          detailData.activeCycles.find((cycle) => !cycle.isDistributed)?.cycleCode ?? null;
+        const defaultMember = detailData.members.find(
+          (member) => member.memberId === searchResult.member.id
+        );
+        const fallbackMember =
+          detailData.members.find((member) => isMemberEligibleForDistribution(member.age)) ?? null;
+        const preferredMember =
+          defaultMember && isMemberEligibleForDistribution(defaultMember.age)
+            ? defaultMember
+            : fallbackMember;
+
+        setDetail(detailData);
+        setSelectedCycleCodes(defaultCycle !== null ? [defaultCycle] : []);
+        setExpandedCycleCodes([]);
+        setSelectedMemberId(preferredMember?.memberId ?? null);
+        setNotes('');
+        setBlockingMessage(null);
+
+        onNavigate({
+          ...route,
+          section: 'distribution',
+          distributionMode: 'detail'
+        });
+      } catch (error) {
+        if (!cancelled) {
+          showErrorToast(error);
+        }
+      } finally {
+        if (!cancelled) {
+          setIsSearching(false);
+          window.sessionStorage.removeItem(DISTRIBUTION_LOOKUP_STORAGE_KEY);
+        }
+      }
+    };
+
+    void openLookup();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [intl, onNavigate, route]);
+
   const handleOpenDetail = async (): Promise<void> => {
     if (!result) {
       return;
@@ -333,26 +421,28 @@ export function Distribution({ route, onNavigate }: ServerRouteComponentProps) {
     setIsSavingDistribution(true);
     setBlockingMessage(null);
     try {
+      const deviceMacAddress = (await getDeviceMacAddress()) ?? '';
       const selectedCycles = detail.activeCycles.filter(
         (cycle) => selectedCycleCodes.includes(cycle.cycleCode) && !cycle.isDistributed
       );
-      const savedCycles: DistributionDetailData['activeCycles'] = [];
+      const savedCycles: Array<{ cycle: DistributionDetailData['activeCycles'][number]; distributionId: number }> = [];
       const duplicateCycles: number[] = [];
 
       for (const cycle of selectedCycles) {
         try {
-          await saveDistributionEvent({
+          const saved = await saveDistributionEvent({
             familyUniqueCode: detail.household.familyUniqueCode,
             memberId: selectedMemberId,
             cycleCode: cycle.cycleCode,
             mainOperator: mainOperator as number,
             mainOperatorFDP,
-            subOperator: null,
+            subOperator: currentUser?.email ?? null,
             quantity: parseQuantity(cycle.quantity),
             appSignature: '1234567890',
-            notes: notes.trim() || null
+            notes: notes.trim() || null,
+            deviceMacAddress
           });
-          savedCycles.push(cycle);
+          savedCycles.push({ cycle, distributionId: saved.id });
         } catch (error) {
           const message = error instanceof Error ? error.message.toLowerCase() : '';
           if (message.includes('duplicate distribution blocked')) {
@@ -402,27 +492,22 @@ export function Distribution({ route, onNavigate }: ServerRouteComponentProps) {
       }
 
       setPrintPreviewPayload({
-        title: intl.formatMessage({ id: 'distribution.receiptTitle' }),
-        headOfHousehold: detail.household.principle || selectedMember.fullName,
-        receiptId: '1234567890',
-        householdId: String(detail.household.familyUniqueCode),
-        fdp: eligibleOverviewSummary.fdpName ?? currentUser?.fdp ?? intl.formatMessage({ id: 'common.na' }),
-        collectedBy: buildCollectorDisplayName({
-          firstName: selectedMember.firstName,
-          lastName: selectedMember.lastName,
-          fatherName: selectedMember.fatherName,
-          fallback: selectedMember.fullName
-        }),
-        printedAtIso: new Date().toISOString(),
-        cycles: savedCycles.map((cycle) => ({
-          cycleName: cycle.cycleName,
-          commodities: (cycle.foodCommodities ?? []).map((commodity) => ({
-            enName: commodity.en_name ?? '',
-            arName: commodity.ar_name ?? '',
-            quantity: String(commodity.quantity ?? intl.formatMessage({ id: 'common.na' }))
-          }))
-        })),
-        format: printSettings.format
+        ...buildReceiptPayload({
+          title: intl.formatMessage({ id: 'distribution.receiptTitle' }),
+          headOfHousehold: detail.household.principle || selectedMember.fullName,
+          householdId: detail.household.familyUniqueCode,
+          receiptSequence: savedCycles[0]?.distributionId ?? null,
+          fdpCode: currentUser?.fdp ?? null,
+          fdpName: eligibleOverviewSummary.fdpName ?? currentUser?.fieldOffice ?? null,
+          collectedByDocument: selectedMember.documentNumber ?? null,
+          printedAtIso: new Date().toISOString(),
+          cycles: savedCycles.map(({ cycle }) => ({
+            cycleName: cycle.cycleName,
+            foodCommodities: cycle.foodCommodities ?? []
+          })),
+          format: printSettings.format,
+          locale: intl.locale
+        })
       });
       setPrintPreviewReturnToSearch(true);
 
@@ -470,31 +555,27 @@ export function Distribution({ route, onNavigate }: ServerRouteComponentProps) {
       const memberMeta = findMemberByHistory(historyItem);
       const printSettings = await getPrintSettings();
 
-      setPrintPreviewPayload({
-        title: intl.formatMessage({ id: 'distribution.receiptTitle' }),
-        headOfHousehold: detail.household.principle || memberMeta?.fullName || intl.formatMessage({ id: 'common.na' }),
-        receiptId: historyItem.appSignature || '1234567890',
-        householdId: String(historyItem.familyUniqueCode),
-        fdp: eligibleOverviewSummary.fdpName ?? currentUser?.fdp ?? intl.formatMessage({ id: 'common.na' }),
-        collectedBy: buildCollectorDisplayName({
-          firstName: historyItem.collectedByFirstName ?? memberMeta?.firstName,
-          lastName: historyItem.collectedByLastName ?? memberMeta?.lastName,
-          fatherName: historyItem.collectedByFatherName ?? memberMeta?.fatherName,
-          fallback: memberMeta?.fullName ?? historyItem.collectedByDocument ?? String(historyItem.memberId)
-        }),
-        printedAtIso: historyItem.createdAt,
-        cycles: [
-          {
-            cycleName: cycleMeta?.cycleName ?? historyItem.cycleName,
-            commodities: (cycleMeta?.foodCommodities ?? []).map((commodity) => ({
-              enName: commodity.en_name ?? '',
-              arName: commodity.ar_name ?? '',
-              quantity: String(commodity.quantity ?? intl.formatMessage({ id: 'common.na' }))
-            }))
-          }
-        ],
-        format: printSettings.format
-      });
+      setPrintPreviewPayload(
+        buildReceiptPayload({
+          title: intl.formatMessage({ id: 'distribution.receiptTitle' }),
+          headOfHousehold:
+            detail.household.principle || memberMeta?.fullName || intl.formatMessage({ id: 'common.na' }),
+          householdId: historyItem.familyUniqueCode,
+          receiptSequence: historyItem.id,
+          fdpCode: currentUser?.fdp ?? null,
+          fdpName: eligibleOverviewSummary.fdpName ?? currentUser?.fieldOffice ?? null,
+          collectedByDocument: historyItem.collectedByDocument ?? memberMeta?.documentNumber ?? null,
+          printedAtIso: historyItem.createdAt,
+          cycles: [
+            {
+              cycleName: cycleMeta?.cycleName ?? historyItem.cycleName,
+              foodCommodities: cycleMeta?.foodCommodities ?? []
+            }
+          ],
+          format: printSettings.format,
+          locale: intl.locale
+        })
+      );
       setPrintPreviewReturnToSearch(false);
     } catch (error) {
       showErrorToast(error);
@@ -523,31 +604,26 @@ export function Distribution({ route, onNavigate }: ServerRouteComponentProps) {
   const handlePrintHistoryItem = (item: FamilyDistributionHistoryItem): void => {
     const cycleMeta = selectedCycleMap.get(item.cycleCode);
     const memberMeta = findMemberByHistory(item);
-    setPrintPreviewPayload({
-      title: intl.formatMessage({ id: 'distribution.receiptTitle' }),
-      headOfHousehold: detail?.household.principle ?? intl.formatMessage({ id: 'common.na' }),
-      receiptId: item.appSignature,
-      householdId: String(item.familyUniqueCode),
-      fdp: eligibleOverviewSummary.fdpName ?? currentUser?.fdp ?? intl.formatMessage({ id: 'common.na' }),
-      collectedBy: buildCollectorDisplayName({
-        firstName: item.collectedByFirstName ?? memberMeta?.firstName,
-        lastName: item.collectedByLastName ?? memberMeta?.lastName,
-        fatherName: item.collectedByFatherName ?? memberMeta?.fatherName,
-        fallback: memberMeta?.fullName ?? item.collectedByDocument ?? String(item.memberId)
-      }),
-      printedAtIso: item.createdAt,
-      cycles: [
-        {
-          cycleName: cycleMeta?.cycleName ?? `Cycle ${item.cycleCode}`,
-          commodities: (cycleMeta?.foodCommodities ?? []).map((commodity) => ({
-            enName: commodity.en_name ?? '',
-            arName: commodity.ar_name ?? '',
-            quantity: String(commodity.quantity ?? intl.formatMessage({ id: 'common.na' }))
-          }))
-        }
-      ],
-      format: 'A5'
-    });
+    setPrintPreviewPayload(
+      buildReceiptPayload({
+        title: intl.formatMessage({ id: 'distribution.receiptTitle' }),
+        headOfHousehold: detail?.household.principle ?? intl.formatMessage({ id: 'common.na' }),
+        householdId: item.familyUniqueCode,
+        receiptSequence: item.id,
+        fdpCode: currentUser?.fdp ?? null,
+        fdpName: eligibleOverviewSummary.fdpName ?? currentUser?.fieldOffice ?? null,
+        collectedByDocument: item.collectedByDocument ?? memberMeta?.documentNumber ?? null,
+        printedAtIso: item.createdAt,
+        cycles: [
+          {
+            cycleName: cycleMeta?.cycleName ?? `Cycle ${item.cycleCode}`,
+            foodCommodities: cycleMeta?.foodCommodities ?? []
+          }
+        ],
+        format: 'A5',
+        locale: intl.locale
+      })
+    );
     setPrintPreviewReturnToSearch(false);
     setIsHistoryOpen(false);
   };
@@ -564,6 +640,7 @@ export function Distribution({ route, onNavigate }: ServerRouteComponentProps) {
             <Input
               aria-label={intl.formatMessage({ id: 'distribution.householdSearchAria' })}
               className="distribution-search-input"
+              autoComplete="off"
               inputMode="numeric"
               pattern="[0-9]*"
               value={query}
@@ -623,25 +700,19 @@ export function Distribution({ route, onNavigate }: ServerRouteComponentProps) {
             <table className="distribution-table" aria-label={intl.formatMessage({ id: 'distribution.resultsAria' })}>
               <thead>
                 <tr>
-                  <th>{intl.formatMessage({ id: 'table.uuid' })}</th>
-                  <th>{intl.formatMessage({ id: 'table.familyId' })}</th>
-                  <th>{intl.formatMessage({ id: 'table.principle' })}</th>
-                  <th>{intl.formatMessage({ id: 'table.phone' })}</th>
-                  <th>{intl.formatMessage({ id: 'table.address' })}</th>
+                  <th>{intl.formatMessage({ id: 'distribution.idmId' })}</th>
+                  <th>{intl.formatMessage({ id: 'distribution.familyBooklet' })}</th>
+                  <th>{intl.formatMessage({ id: 'distribution.headOfHouseholdFullName' })}</th>
+                  <th>{intl.formatMessage({ id: 'distribution.fdpName' })}</th>
                   <th>{intl.formatMessage({ id: 'table.actions' })}</th>
                 </tr>
               </thead>
               <tbody>
                 <tr>
-                  <td>{result.member.id}</td>
                   <td>{result.member.familyUniqueCode}</td>
-                  <td>
-                    {isPrincipleRole(result.member.role)
-                      ? intl.formatMessage({ id: 'common.yes' })
-                      : intl.formatMessage({ id: 'common.no' })}
-                  </td>
-                  <td>{intl.formatMessage({ id: 'common.na' })}</td>
-                  <td>{intl.formatMessage({ id: 'common.na' })}</td>
+                  <td>{result.member.familyBooklet ?? intl.formatMessage({ id: 'common.na' })}</td>
+                  <td>{result.member.principleFullName}</td>
+                  <td>{result.member.fdpName}</td>
                   <td className="distribution-action-cell">
                     <div className="distribution-action-content">
                       <button
@@ -678,11 +749,11 @@ export function Distribution({ route, onNavigate }: ServerRouteComponentProps) {
                 <dd>{detail.household.idmId}</dd>
               </div>
               <div>
-                <dt>{intl.formatMessage({ id: 'distribution.booklet' })}</dt>
+                <dt>{intl.formatMessage({ id: 'distribution.familyBooklet' })}</dt>
                 <dd>{detail.household.booklet}</dd>
               </div>
               <div>
-                <dt>{intl.formatMessage({ id: 'distribution.principle' })}</dt>
+                <dt>{intl.formatMessage({ id: 'distribution.headOfHouseholdFullName' })}</dt>
                 <dd>{detail.household.principle}</dd>
               </div>
               <div>
@@ -698,7 +769,7 @@ export function Distribution({ route, onNavigate }: ServerRouteComponentProps) {
                 <dd>{detail.household.pbwgs}</dd>
               </div>
               <div>
-                <dt>{intl.formatMessage({ id: 'distribution.children623' })}</dt>
+                <dt>{intl.formatMessage({ id: 'distribution.childrenBetween623Months' })}</dt>
                 <dd>{detail.household.children623}</dd>
               </div>
             </dl>
@@ -869,10 +940,14 @@ export function Distribution({ route, onNavigate }: ServerRouteComponentProps) {
                         name="selected-member"
                         checked={selectedMemberId === member.memberId}
                         disabled={
+                          isMemberSelectionDisabled ||
                           !isMemberEligibleForDistribution(member.age) ||
                           !hasUsableDocumentId(member.documentNumber)
                         }
                         onChange={() => {
+                          if (isMemberSelectionDisabled) {
+                            return;
+                          }
                           if (!isMemberEligibleForDistribution(member.age)) {
                             return;
                           }
@@ -992,9 +1067,8 @@ export function Distribution({ route, onNavigate }: ServerRouteComponentProps) {
                 <thead>
                   <tr>
                     <th>{intl.formatMessage({ id: 'table.date' })}</th>
-                    <th>{intl.formatMessage({ id: 'table.time' })}</th>
                     <th>{intl.formatMessage({ id: 'table.cycle' })}</th>
-                    <th>{intl.formatMessage({ id: 'table.quantity' })}</th>
+                    <th>{intl.formatMessage({ id: 'distribution.notes' })}</th>
                     <th>{intl.formatMessage({ id: 'table.actions' })}</th>
                   </tr>
                 </thead>
@@ -1003,17 +1077,15 @@ export function Distribution({ route, onNavigate }: ServerRouteComponentProps) {
                     const createdAt = new Date(item.createdAt);
                     const date = Number.isNaN(createdAt.getTime())
                       ? intl.formatMessage({ id: 'common.na' })
-                      : createdAt.toLocaleDateString('en-GB');
-                    const time = Number.isNaN(createdAt.getTime())
-                      ? intl.formatMessage({ id: 'common.na' })
-                      : createdAt.toLocaleTimeString('en-GB', { hour12: false });
+                      : `${createdAt.toLocaleDateString('en-GB')} ${createdAt.toLocaleTimeString('en-GB', {
+                          hour12: false
+                        })}`;
 
                     return (
                       <tr key={`${item.status}-${item.cycleCode}-${item.createdAt}-${item.id}`}>
                         <td>{date}</td>
-                        <td>{time}</td>
                         <td>{item.cycleName}</td>
-                        <td>{item.quantity}</td>
+                        <td>{item.notes ?? intl.formatMessage({ id: 'common.na' })}</td>
                         <td>
                           <button
                             type="button"

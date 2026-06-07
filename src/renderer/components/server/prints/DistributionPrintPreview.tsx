@@ -22,7 +22,7 @@ export function DistributionPrintPreview({ payload, onClose, onPrinted }: Props)
 
   const handlePrint = useReactToPrint({
     contentRef: printRef,
-    documentTitle: `receipt-${payload.householdId}-${payload.format}`,
+    documentTitle: `receipt-${payload.receiptId}-${payload.format}`,
     onAfterPrint: onPrinted
   });
 

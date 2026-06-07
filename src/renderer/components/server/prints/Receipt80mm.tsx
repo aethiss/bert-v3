@@ -1,18 +1,42 @@
 import type { ReactElement } from 'react';
 import { useIntl } from 'react-intl';
 import type { ReceiptPayload } from './types';
-import { formatReceiptDateTime } from './receiptHelpers';
+import { formatReceiptDateTime, splitReceiptId } from './receiptHelpers';
+import { ReceiptCycleBlock } from './ReceiptCycleBlock';
 
 type Props = {
   logoSrc: string;
   payload: ReceiptPayload;
 };
 
-function Row({ label, value, fallback }: { label: string; value: string; fallback: string }): ReactElement {
+function Row({
+  label,
+  value,
+  fallback,
+  kind,
+  valueClassName
+}: {
+  label: string;
+  value: string;
+  fallback: string;
+  kind?: 'text' | 'receiptId';
+  valueClassName?: string;
+}): ReactElement {
+  const isReceiptId = kind === 'receiptId';
+  const receiptIdParts = isReceiptId ? splitReceiptId(value) : null;
   return (
     <div className="receipt-row receipt-row-80">
       <div className="receipt-row-label receipt-row-label-80">{label}</div>
-      <div className="receipt-row-value">{value || fallback}</div>
+      <div className={`receipt-row-value${valueClassName ? ` ${valueClassName}` : ''}`}>
+        {isReceiptId && receiptIdParts ? (
+          <>
+            <span className="receipt-row-value-receipt-id-prefix">{receiptIdParts.prefix}</span>
+            <span className="receipt-row-value-receipt-id-sequence">-{receiptIdParts.sequence}</span>
+          </>
+        ) : (
+          value || fallback
+        )}
+      </div>
     </div>
   );
 }
@@ -44,6 +68,8 @@ export function Receipt80mm({ logoSrc, payload }: Props): ReactElement {
           label={intl.formatMessage({ id: 'receipt.label.receiptId' })}
           value={payload.receiptId}
           fallback={intl.formatMessage({ id: 'common.na' })}
+          kind="receiptId"
+          valueClassName="receipt-row-value-receipt-id"
         />
         <Row
           label={intl.formatMessage({ id: 'receipt.label.householdId' })}
@@ -66,31 +92,15 @@ export function Receipt80mm({ logoSrc, payload }: Props): ReactElement {
       <div className="receipt-section">
         {payload.cycles.length > 0 ? (
           payload.cycles.map((cycle, index) => (
-            <div key={`${cycle.cycleName}-${index}`} className="receipt-cycle receipt-cycle-80">
-              <div>
-                <span className="receipt-bold">{intl.formatMessage({ id: 'receipt.label.cycle' })}</span>{' '}
-                {cycle.cycleName || intl.formatMessage({ id: 'common.na' })}
-              </div>
-              {(cycle.commodities ?? []).length > 0 ? (
-                (cycle.commodities ?? []).map((commodity, commodityIndex) => (
-                  <div key={`${cycle.cycleName}-${index}-${commodityIndex}`} className="receipt-commodity-row">
-                    <span className="receipt-commodity-name">
-                      {(intl.locale.toLowerCase().startsWith('ar')
-                        ? commodity.arName || commodity.enName
-                        : commodity.enName || commodity.arName) || intl.formatMessage({ id: 'common.na' })}
-                    </span>
-                    <span className="receipt-commodity-qty">
-                      QTY {commodity.quantity || intl.formatMessage({ id: 'common.na' })}
-                    </span>
-                  </div>
-                ))
-              ) : (
-                <div>{intl.formatMessage({ id: 'receipt.noData' })}</div>
-              )}
-              {index !== payload.cycles.length - 1 ? (
-                <div className="receipt-plus">++++++++++++++++++++++++++++++++++++++++++++++</div>
-              ) : null}
-            </div>
+            <ReceiptCycleBlock
+              key={`${cycle.cycleName}-${index}`}
+              cycle={cycle}
+              index={index}
+              total={payload.cycles.length}
+              sizeClassName="receipt-cycle-80"
+              separatorKind="plus"
+              separatorText="++++++++++++++++++++++++++++++++++++++++++++++"
+            />
           ))
         ) : (
           <div className="receipt-cycle receipt-cycle-80">{intl.formatMessage({ id: 'receipt.noData' })}</div>

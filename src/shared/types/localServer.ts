@@ -32,3 +32,13 @@ export interface ClientConnectionSettings {
   oneTimePassword: string;
   alias: string;
 }
+
+export interface ClientLoginResponse {
+  accessToken: string;
+  tokenType: 'Bearer';
+  expiresAt: string;
+  alias: string;
+  serverVersion: string;
+  fdpCode: string | null;
+  fieldOffice: string | null;
+}

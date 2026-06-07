@@ -42,6 +42,18 @@ export async function checkForUpdates(jwt: string): Promise<UpdaterState> {
   return window.bertApp.updater.checkForUpdates(jwt);
 }
 
+export async function checkForUpdatesAfterLogin(jwt: string): Promise<void> {
+  if (!jwt.trim()) {
+    return;
+  }
+
+  try {
+    await checkForUpdates(jwt);
+  } catch (error) {
+    console.warn('[updater] Automatic post-login version check failed', error);
+  }
+}
+
 export async function downloadUpdate(jwt: string): Promise<UpdaterState> {
   if (!hasUpdaterApi()) {
     return getFallbackState();

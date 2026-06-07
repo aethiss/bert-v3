@@ -6,12 +6,16 @@ import {
   getDistributionQueue,
   pushDistributionQueue
 } from '@renderer/services/eligibleDataService';
+import { isAuthExpiredError } from '@renderer/lib/authExpiry';
 import { showErrorToast } from '@renderer/lib/errorToast';
 import { useAppSelector } from '@renderer/store/hooks';
 import { selectIsOnline, selectJwt } from '@renderer/store/selectors/authSelectors';
 
 type Props = {
   pendingDistributionCount: number;
+  isSynchronizing: boolean;
+  onSynchronize: () => Promise<void> | void;
+  onAuthExpired: () => Promise<void> | void;
 };
 
 function toWorksheetCell(value: unknown): string {
@@ -94,7 +98,12 @@ function downloadExcel(filename: string, content: string): void {
   URL.revokeObjectURL(url);
 }
 
-export function Data({ pendingDistributionCount }: Props) {
+export function Data({
+  pendingDistributionCount,
+  isSynchronizing,
+  onSynchronize,
+  onAuthExpired
+}: Props) {
   const intl = useIntl();
   const [isPushConfirmOpen, setIsPushConfirmOpen] = useState(false);
   const [isPushing, setIsPushing] = useState(false);
@@ -132,7 +141,20 @@ export function Data({ pendingDistributionCount }: Props) {
         )
       });
       setIsPushConfirmOpen(false);
+      toast.info(intl.formatMessage({ id: 'data.syncingAfterPushTitle' }), {
+        description: intl.formatMessage({ id: 'data.syncingAfterPushDescription' })
+      });
+      void onSynchronize();
     } catch (error) {
+      if (isAuthExpiredError(error)) {
+        setIsPushConfirmOpen(false);
+        toast.error(intl.formatMessage({ id: 'data.pushAuthExpiredTitle' }), {
+          description: intl.formatMessage({ id: 'data.pushAuthExpiredDescription' })
+        });
+        await onAuthExpired();
+        return;
+      }
+
       showErrorToast(error);
     } finally {
       setIsPushing(false);
@@ -175,10 +197,13 @@ export function Data({ pendingDistributionCount }: Props) {
           <div>
             <p className="data-section-title">{intl.formatMessage({ id: 'data.syncSectionTitle' })}</p>
             <p className="data-section-warning">X {pendingText}</p>
+            {isSynchronizing ? (
+              <p className="data-syncing-message">{intl.formatMessage({ id: 'data.syncingAfterPushDescription' })}</p>
+            ) : null}
           </div>
           <Button
             className="server-btn data-action-btn"
-            disabled={pendingDistributionCount === 0 || isPushing || !isOnline || !jwt}
+            disabled={pendingDistributionCount === 0 || isPushing || isSynchronizing || !isOnline || !jwt}
             onClick={() => {
               setIsPushConfirmOpen(true);
             }}
@@ -215,7 +240,7 @@ export function Data({ pendingDistributionCount }: Props) {
               <Button
                 className="server-btn"
                 onClick={() => void handlePushDistribution()}
-                disabled={isPushing}
+                disabled={isPushing || isSynchronizing}
               >
                 {isPushing
                   ? intl.formatMessage({ id: 'data.confirming' })
@@ -227,7 +252,7 @@ export function Data({ pendingDistributionCount }: Props) {
                 onClick={() => {
                   setIsPushConfirmOpen(false);
                 }}
-                disabled={isPushing}
+                disabled={isPushing || isSynchronizing}
               >
                 {intl.formatMessage({ id: 'common.cancel' })}
               </Button>

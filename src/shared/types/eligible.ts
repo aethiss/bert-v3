@@ -10,6 +10,16 @@ export interface EligibleFoodCommodityApiModel {
   weight: number | null;
 }
 
+export interface EligibleFoodBasketApiModel {
+  id: number;
+  unique_id: string;
+  code: string;
+  en_name: string;
+  ar_name: string;
+  description: string | null;
+  commodities?: EligibleFoodCommodityApiModel[];
+}
+
 export interface EligibleCycleApiModel {
   cycleId: string;
   cycleCode: number;
@@ -18,10 +28,13 @@ export interface EligibleCycleApiModel {
   cooperatingPartner: string | null;
   fieldDistributionPoint: string | null;
   assistancePackageName: string;
+  cycleEnName?: string | null;
+  cycleArName?: string | null;
   cycleName: string;
   cycleNote: string | null;
   household_count: number;
   foodCommodities?: EligibleFoodCommodityApiModel[];
+  food_basket?: EligibleFoodBasketApiModel[];
 }
 
 export interface EligibleFamilyCycleApiModel {
@@ -34,6 +47,7 @@ export interface EligibleFamilyApiModel {
   address: string | null;
   status: string;
   eligible: boolean;
+  principle_family_booklet?: string | null;
   fdp_id: string;
   fdp_name: string;
   Number_of_Children_between_6_and_23_Months: number;
@@ -87,11 +101,14 @@ export interface EligibleOverviewSummary {
   cycles: EligibleCycleSummary[];
 }
 
-export type DistributionSearchMatch = 'familyUniqueCode' | 'documentNumber';
+export type DistributionSearchMatch = 'familyUniqueCode' | 'familyBooklet' | 'documentNumber';
 
 export interface DistributionSearchMember {
   id: number;
   fullName: string;
+  principleFullName: string;
+  fdpName: string;
+  familyBooklet: string | null;
   role: string | null;
   documentNumber: string | null;
   familyUniqueCode: number;
@@ -152,6 +169,7 @@ export interface LocalDistributionEventInput {
   quantity: number;
   appSignature: string;
   notes: string | null;
+  deviceMacAddress: string;
 }
 
 export interface DistributionQueueItem {
@@ -165,6 +183,7 @@ export interface DistributionQueueItem {
   quantity: number;
   appSignature: string;
   notes: string | null;
+  deviceMacAddress: string;
   status: string;
   createdAt: string;
 }
@@ -212,8 +231,11 @@ export interface PushDistributionResult {
 
 export interface ClientDistributionInput {
   subOperator: string;
+  familyUniqueCode: number;
   cycleCode: number;
   memberId: number;
+  notes: string | null;
+  deviceMacAddress: string;
 }
 
 export interface ClientDistributionHistoryInput {
@@ -224,6 +246,9 @@ export interface ClientDistributionHistoryInput {
   cycleCode: number;
   cycleName: string;
   collectedBy: string;
+  collectedByDocument: string | null;
+  quantity: number;
+  notes: string | null;
 }
 
 export interface ClientDistributionHistoryItem {
@@ -235,6 +260,9 @@ export interface ClientDistributionHistoryItem {
   cycleCode: number;
   cycleName: string;
   collectedBy: string;
+  collectedByDocument: string | null;
+  quantity: number;
+  notes: string | null;
   createdAt: string;
 }
 

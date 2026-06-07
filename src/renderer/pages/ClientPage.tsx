@@ -102,6 +102,21 @@ export function ClientPage({ route, appVersion, onNavigate }: ClientPageProps) {
         )
       });
 
+      if (
+        nextSession.serverVersion.trim() &&
+        nextSession.serverVersion.trim() !== appVersion.trim()
+      ) {
+        toast.info(intl.formatMessage({ id: 'client.versionMismatchTitle' }), {
+          description: intl.formatMessage(
+            { id: 'client.versionMismatchDescription' },
+            {
+              clientVersion: appVersion,
+              serverVersion: nextSession.serverVersion
+            }
+          )
+        });
+      }
+
       if (route.section === 'configuration') {
         onNavigate({
           ...route,

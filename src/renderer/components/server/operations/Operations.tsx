@@ -6,6 +6,9 @@ import { Button } from '@ui/components/ui/button';
 import { getOperationsDashboard } from '@renderer/services/configService';
 import { showErrorToast } from '@renderer/lib/errorToast';
 import type { OperationsDashboard } from '@shared/types/operations';
+import type { ServerRouteComponentProps } from '@renderer/components/server/types';
+
+const DISTRIBUTION_LOOKUP_STORAGE_KEY = 'bert.operations.distributionLookup';
 
 const DEFAULT_DASHBOARD: OperationsDashboard = {
   serverRunning: false,
@@ -25,7 +28,7 @@ const DEFAULT_DASHBOARD: OperationsDashboard = {
 
 const PAGE_SIZE = 10;
 
-export function Operations() {
+export function Operations({ route, onNavigate }: ServerRouteComponentProps) {
   const intl = useIntl();
   const [dashboard, setDashboard] = useState<OperationsDashboard>(DEFAULT_DASHBOARD);
   const [search, setSearch] = useState('');
@@ -79,9 +82,7 @@ export function Operations() {
       <section className="operations-top-grid">
         <article className="operations-card">
           <h2>{intl.formatMessage({ id: 'operations.overviewTitle' })}</h2>
-          {dashboard.overviewBars.length === 0 ? (
-            <p className="operations-muted">{intl.formatMessage({ id: 'operations.noPending' })}</p>
-          ) : (
+          {dashboard.overviewBars.length > 0 ? (
             <div className="operations-bars">
               {dashboard.overviewBars.map((item) => {
                 const width = Math.max(
@@ -101,16 +102,7 @@ export function Operations() {
                 );
               })}
             </div>
-          )}
-          <p className="operations-muted">
-            {intl.formatMessage(
-              { id: 'operations.pendingSummary' },
-              {
-                pending: dashboard.totalDistributions,
-                eligible: dashboard.totalEligibleHouseholds
-              }
-            )}
-          </p>
+          ) : null}
         </article>
 
         <article className="operations-card">
@@ -179,22 +171,46 @@ export function Operations() {
           <thead>
             <tr>
               <th>{intl.formatMessage({ id: 'table.operator' })}</th>
-              <th>{intl.formatMessage({ id: 'table.uuid' })}</th>
+              <th>{intl.formatMessage({ id: 'distribution.idmId' })}</th>
+              <th>{intl.formatMessage({ id: 'table.documentId' })}</th>
               <th>{intl.formatMessage({ id: 'table.date' })}</th>
-              <th>{intl.formatMessage({ id: 'table.time' })}</th>
-              <th>{intl.formatMessage({ id: 'table.cycle' })}</th>
+              <th>{intl.formatMessage({ id: 'distribution.notes' })}</th>
             </tr>
           </thead>
           <tbody>
             {dashboard.distributions.items.map((item) => (
-              <tr key={item.id}>
+              <tr
+                key={item.id}
+                role="button"
+                tabIndex={0}
+                className="operations-row-clickable"
+                onClick={() => {
+                  const lookup = item.documentNumber?.trim() || String(item.familyUniqueCode);
+                  window.sessionStorage.setItem(DISTRIBUTION_LOOKUP_STORAGE_KEY, lookup);
+                  onNavigate({
+                    ...route,
+                    section: 'distribution',
+                    distributionMode: 'search'
+                  });
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    const lookup = item.documentNumber?.trim() || String(item.familyUniqueCode);
+                    window.sessionStorage.setItem(DISTRIBUTION_LOOKUP_STORAGE_KEY, lookup);
+                    onNavigate({
+                      ...route,
+                      section: 'distribution',
+                      distributionMode: 'search'
+                    });
+                  }
+                }}
+              >
                 <td>{item.subOperator}</td>
-                <td>{item.memberId}</td>
+                <td>{item.familyUniqueCode}</td>
+                <td>{item.documentNumber ?? intl.formatMessage({ id: 'common.na' })}</td>
                 <td>{item.date}</td>
-                <td>{item.time}</td>
-                <td>
-                  {item.cycleName} ({item.cycleCode})
-                </td>
+                <td>{item.notes ?? intl.formatMessage({ id: 'common.na' })}</td>
               </tr>
             ))}
           </tbody>

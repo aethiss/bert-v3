@@ -1,4 +1,4 @@
-import { Printer, Server as ServerIcon, Unplug } from 'lucide-react';
+import { Server as ServerIcon, Unplug } from 'lucide-react';
 import { useIntl } from 'react-intl';
 import type { ServerSection } from '@renderer/components/server/types';
 import { Button } from '@ui/components/ui/button';
@@ -80,10 +80,6 @@ export function TopNavigation({
       </nav>
 
       <div className="server-status-area">
-        <div className="server-status ready">
-          <Printer size={14} />
-          <span>{intl.formatMessage({ id: 'status.ready' })}</span>
-        </div>
         <div className={isOnline ? 'server-status online' : 'server-status offline'}>
           <Unplug size={14} />
           <span>{isOnline ? intl.formatMessage({ id: 'status.online' }) : intl.formatMessage({ id: 'status.offline' })}</span>

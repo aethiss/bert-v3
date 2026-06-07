@@ -73,11 +73,6 @@ export function Overview({
               ? intl.formatMessage({ id: 'status.online' })
               : intl.formatMessage({ id: 'status.offline' })}
           </span>
-          <span className="overview-sync-meta overview-sync-stats">
-            {intl.formatMessage({ id: 'overview.server.members' })}: {overviewSummary.totalMembers}
-            {' • '}
-            {intl.formatMessage({ id: 'overview.server.households' })}: {overviewSummary.totalHouseholds}
-          </span>
         </p>
         <Button
           className="server-btn"
@@ -102,7 +97,7 @@ export function Overview({
                     intl.formatMessage({ id: 'overview.server.cycleFallback' }, { index: index + 1 })}
                 </p>
                 <p className="overview-cycle-total">
-                  {intl.formatMessage({ id: 'overview.server.totalMemberLabel' })} {cycle.householdCount ?? 0}
+                  {intl.formatMessage({ id: 'overview.server.totalHouseholdsLabel' })} {cycle.householdCount ?? 0}
                 </p>
                 <p className="overview-cycle-date">
                   {formatDate(cycle.startDate ?? '', intl.locale)} -{' '}
