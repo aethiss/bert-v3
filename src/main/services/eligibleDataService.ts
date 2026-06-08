@@ -1806,6 +1806,18 @@ export function createEligibleDataService(db: Database): EligibleDataService {
       payload.cycleCode
     );
     const quantity = normalizeQuantity(quantityRow?.quantity);
+    const distributionTimeIso = new Date().toISOString();
+    const appSignature = buildDistributionAppSignature({
+      familyUniqueCode,
+      memberId: payload.memberId,
+      cycleCode: payload.cycleCode,
+      mainOperator: serverOperator.mainOperator,
+      mainOperatorFDP: serverOperator.mainOperatorFDP,
+      subOperator,
+      quantity,
+      notes: null,
+      distributionTimeIso
+    });
 
     const result = await db.run(
       `
@@ -1831,7 +1843,7 @@ export function createEligibleDataService(db: Database): EligibleDataService {
       serverOperator.mainOperatorFDP,
       subOperator,
       quantity,
-      'LAN_CLIENT',
+      appSignature,
       null,
       deviceMacAddress
     );

@@ -185,21 +185,12 @@ export function registerConfigIpc(
         clientCycleMap.set(item.alias, existing);
       }
 
-      const byAliasPresence = new Map(presence.map((client) => [client.alias, client]));
-      const aliases = new Set<string>();
-      for (const entry of aggregates.overviewBars) {
-        aliases.add(entry.alias);
-      }
-      for (const entry of presence) {
-        aliases.add(entry.alias);
-      }
-
-      const clients = Array.from(aliases)
-        .map((alias) => {
-          const presenceItem = byAliasPresence.get(alias);
+      const clients = presence
+        .filter((client) => client.isConnected)
+        .map((client) => {
           const totalDistributed =
-            aggregates.overviewBars.find((item) => item.alias === alias)?.distributedCount ?? 0;
-          const cycles = (clientCycleMap.get(alias) ?? []).map((cycle) => {
+            aggregates.overviewBars.find((item) => item.alias === client.alias)?.distributedCount ?? 0;
+          const cycles = (clientCycleMap.get(client.alias) ?? []).map((cycle) => {
             const cycleInfo = cycleLookup.get(cycle.cycleCode);
             return {
               cycleCode: cycle.cycleCode,
@@ -210,19 +201,14 @@ export function registerConfigIpc(
           });
 
           return {
-            alias,
-            isConnected: presenceItem?.isConnected ?? false,
-            lastSeenAt: presenceItem?.lastSeenAt ?? null,
+            alias: client.alias,
+            isConnected: true,
+            lastSeenAt: client.lastSeenAt,
             totalDistributed,
             cycles
           };
         })
-        .sort((left, right) => {
-          if (left.isConnected !== right.isConnected) {
-            return left.isConnected ? -1 : 1;
-          }
-          return right.totalDistributed - left.totalDistributed;
-        });
+        .sort((left, right) => right.totalDistributed - left.totalDistributed);
 
       const totalEligibleHouseholds = aggregates.cycleProgress.reduce(
         (sum, cycle) => sum + cycle.totalHouseholds,

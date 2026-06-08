@@ -226,7 +226,7 @@
   "overview.server.cycleFallback": "Cycle {index}",
   "overview.server.households": "Households",
   "overview.server.lastSync": "Last sync",
-  "overview.server.activeCycleTag": "Active Cicle",
+  "overview.server.activeCycleTag": "Active Cycle",
   "overview.server.never": "Never",
   "overview.server.synchronize": "Synchronize",
   "overview.server.synchronizing": "Synchronizing...",
