@@ -11,6 +11,7 @@ import type {
   DistributionActiveCycle,
   DistributionDetailData,
   EligibleFoodCommodityApiModel,
+  EligibleFoodBasketApiModel,
   EligibleFamilyApiModel,
   DistributionHouseholdInfo,
   DistributionHouseholdMember,
@@ -20,6 +21,8 @@ import type {
   EligibleMemberApiModel,
   EligibleMembersApiResponse,
   EligibleOverviewSummary,
+  DistributionReportItem,
+  UndistributedHouseholdReportItem,
   LocalDistributionEventInput
 } from '../../shared/types/eligible';
 import type { OperationsDashboardQuery } from '../../shared/types/operations';
@@ -118,8 +121,74 @@ function getEligibleCycleFoodCommodities(
   return cycle.foodCommodities ?? [];
 }
 
+function getEligibleCycleFoodBaskets(cycle: EligibleCycleApiModel): EligibleFoodBasketApiModel[] {
+  return cycle.food_basket ?? [];
+}
+
 function getEligibleFamilyBooklet(family: EligibleFamilyApiModel): string | null {
   return asNullableText(family.principle_family_booklet);
+}
+
+function getEligibleFamilyPhone(family: EligibleFamilyApiModel): string | null {
+  return asNullableText(family.principle_mobile);
+}
+
+function getEligibleFamilyCreatedDate(family: EligibleFamilyApiModel): string | null {
+  return asNullableText(family.createdDate);
+}
+
+function getEligibleFamilyBpwCount(family: EligibleFamilyApiModel): number {
+  return asNumber(family.bpw_count);
+}
+
+function getAgeGroupLabel(dateOfBirth: string | null | undefined): string {
+  const age = computeAge(dateOfBirth ?? null);
+  if (age === null) {
+    return '';
+  }
+
+  if (age < 18) {
+    return '23 Months - 18 Yrs';
+  }
+
+  if (age <= 60) {
+    return '18-60';
+  }
+
+  return '>60';
+}
+
+function formatReceiptSequence(value: number | string | null | undefined): string {
+  if (value === null || value === undefined) {
+    return '';
+  }
+
+  const numericValue = typeof value === 'number' ? value : Number(String(value).trim());
+  if (!Number.isFinite(numericValue)) {
+    return '';
+  }
+
+  return String(Math.trunc(numericValue)).padStart(4, '0');
+}
+
+function buildReceiptId(params: {
+  fdpCode: string | null | undefined;
+  householdId: number | string;
+  sequence: number | string | null | undefined;
+}): string {
+  const fdpCode = (params.fdpCode ?? '').trim();
+  const householdId = String(params.householdId).trim();
+  const sequence = formatReceiptSequence(params.sequence);
+
+  if (!fdpCode || !householdId || !sequence) {
+    return '';
+  }
+
+  return `${fdpCode}-${householdId}-${sequence}`;
+}
+
+function formatFullName(firstName: string | null | undefined, lastName: string | null | undefined): string {
+  return `${firstName ?? ''} ${lastName ?? ''}`.trim();
 }
 
 export function normalizeClientHistoryPagination(page: number, pageSize: number): {
@@ -164,6 +233,8 @@ export function buildOverviewSummaryFromPayload(
 
 export interface EligibleDataService {
   saveEligibleMembers(payload: EligibleMembersApiResponse): Promise<EligibleOverviewSummary>;
+  getDistributionReport(): Promise<DistributionReportItem[]>;
+  getUndistributedHouseholdReport(): Promise<UndistributedHouseholdReportItem[]>;
   searchDistributionMember(query: string): Promise<DistributionSearchResult | null>;
   getDistributionDetail(params: {
     memberId: number;
@@ -265,6 +336,9 @@ interface DistributionHouseholdMemberRow {
 interface DistributionHouseholdInfoRow {
   familyUniqueCode: number;
   booklet: string | null;
+  phone: string | null;
+  createdDate: string | null;
+  bpwCount: number | null;
   children623: number;
   updatedAt: string | null;
 }
@@ -272,6 +346,41 @@ interface DistributionHouseholdInfoRow {
 interface DistributionPrincipleRow {
   firstName: string | null;
   lastName: string | null;
+}
+
+interface UndistributedHouseholdReportRow {
+  householdId: number;
+  principalPhoneNo: string | null;
+  hhSubdistrict: string | null;
+  cycleCode: string | null;
+  cpEnName: string | null;
+  fdpEnName: string | null;
+}
+
+interface DistributionReportDbRow {
+  sourceType: 'synced' | 'local';
+  transactionId: number | null;
+  localDistributionId: number | null;
+  familyUniqueCode: number;
+  memberId: number | null;
+  hhid: string | null;
+  hhMembers: number | null;
+  hhRegistrationDate: string | null;
+  ageGroup: string | null;
+  timestamp: string | null;
+  hhSubdistrict: string | null;
+  cycleCode: number;
+  cycleName: string | null;
+  foodBasket: string | null;
+  quantity: string | null;
+  collectedByFirstName: string | null;
+  collectedByLastName: string | null;
+  collectedByFatherName: string | null;
+  collectedByNationalId: string | null;
+  operator: string | null;
+  remarks: string | null;
+  sourcefile: string | null;
+  dateOfBirth: string | null;
 }
 
 export function isPrincipleRole(role: string | null): boolean {
@@ -367,6 +476,10 @@ function getDistributionHistoryCycleCode(entry: Record<string, unknown>): number
   return toSafeInteger(entry.cycleCode);
 }
 
+function getDistributionHistoryId(entry: Record<string, unknown>): number | null {
+  return toSafeInteger(entry.id);
+}
+
 function getDistributionHistoryFamilyUniqueCode(
   entry: Record<string, unknown>,
   fallbackFamilyUniqueCode: number
@@ -376,6 +489,14 @@ function getDistributionHistoryFamilyUniqueCode(
 
 function getDistributionHistoryCollectedByDocument(entry: Record<string, unknown>): string | null {
   return asNullableText(entry.collectedByNationalId);
+}
+
+function getDistributionHistoryOperator(entry: Record<string, unknown>): string | null {
+  return asNullableText(entry.operator);
+}
+
+function getDistributionHistorySourcefile(entry: Record<string, unknown>): string | null {
+  return asNullableText(entry.sourcefile);
 }
 
 function findHistoryCollectorMember(
@@ -423,10 +544,39 @@ export function createEligibleDataService(db: Database): EligibleDataService {
     };
   }
 
+  async function getUserProfileContext(): Promise<{
+    corporatePartner: string;
+    fieldOffice: string;
+    fdp: string;
+  }> {
+    const row = await db.get<{
+      corporatePartner: string | null;
+      fieldOffice: string | null;
+      fdp: string | null;
+    }>(
+      `
+      SELECT
+        corporate_partner as corporatePartner,
+        field_office as fieldOffice,
+        fdp as fdp
+      FROM "user"
+      WHERE id = 1
+      LIMIT 1
+      `
+    );
+
+    return {
+      corporatePartner: asText(row?.corporatePartner).trim(),
+      fieldOffice: asText(row?.fieldOffice).trim(),
+      fdp: asText(row?.fdp).trim()
+    };
+  }
+
   async function clearEligibleData(): Promise<void> {
     await db.exec('BEGIN TRANSACTION');
     try {
       await db.run('DELETE FROM cycle_food_commodities');
+      await db.run('DELETE FROM cycle_food_baskets');
       await db.run('DELETE FROM synced_distribution_history');
       await db.run('DELETE FROM distribution_list');
       await db.run('DELETE FROM members');
@@ -446,6 +596,7 @@ export function createEligibleDataService(db: Database): EligibleDataService {
     await db.exec('BEGIN TRANSACTION');
     try {
       await db.run('DELETE FROM cycle_food_commodities');
+      await db.run('DELETE FROM cycle_food_baskets');
       await db.run('DELETE FROM synced_distribution_history');
       await db.run('DELETE FROM distribution_list');
       await db.run('DELETE FROM members');
@@ -544,6 +695,43 @@ export function createEligibleDataService(db: Database): EligibleDataService {
             asRealNumber(commodity.weight)
           );
         }
+
+        for (const foodBasket of getEligibleCycleFoodBaskets(cycle)) {
+          const basketId = toSafeInteger(foodBasket.id);
+          if (basketId === null) {
+            skippedCycleFoodCommodities += 1;
+            continue;
+          }
+
+          await db.run(
+            `
+            INSERT INTO cycle_food_baskets (
+              cycle_code,
+              basket_id,
+              unique_id,
+              code,
+              en_name,
+              ar_name,
+              description
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(cycle_code, basket_id) DO UPDATE SET
+              unique_id = excluded.unique_id,
+              code = excluded.code,
+              en_name = excluded.en_name,
+              ar_name = excluded.ar_name,
+              description = excluded.description,
+              updated_at = CURRENT_TIMESTAMP
+            `,
+            cycleCode,
+            basketId,
+            asText(foodBasket.unique_id),
+            asText(foodBasket.code),
+            asText(foodBasket.en_name),
+            asText(foodBasket.ar_name),
+            asNullableText(foodBasket.description)
+          );
+        }
       }
 
       for (const family of payload.families ?? []) {
@@ -561,16 +749,22 @@ export function createEligibleDataService(db: Database): EligibleDataService {
             status,
             eligible,
             principle_family_booklet,
+            principle_mobile,
+            created_date,
+            bpw_count,
             fdp_id,
             fdp_name,
             children_6_23_months
           )
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
           ON CONFLICT(family_unique_code) DO UPDATE SET
             address = excluded.address,
             status = excluded.status,
             eligible = excluded.eligible,
             principle_family_booklet = excluded.principle_family_booklet,
+            principle_mobile = excluded.principle_mobile,
+            created_date = excluded.created_date,
+            bpw_count = excluded.bpw_count,
             fdp_id = excluded.fdp_id,
             fdp_name = excluded.fdp_name,
             children_6_23_months = excluded.children_6_23_months,
@@ -581,6 +775,9 @@ export function createEligibleDataService(db: Database): EligibleDataService {
           asText(family.status),
           family.eligible ? 1 : 0,
           getEligibleFamilyBooklet(family),
+          getEligibleFamilyPhone(family),
+          getEligibleFamilyCreatedDate(family),
+          getEligibleFamilyBpwCount(family),
           asText(family.fdp_id),
           asText(family.fdp_name),
           asNumber(family.Number_of_Children_between_6_and_23_Months)
@@ -651,34 +848,43 @@ export function createEligibleDataService(db: Database): EligibleDataService {
             INSERT INTO synced_distribution_history (
               family_unique_code,
               cycle_code,
+              distribution_id,
               distribution_time,
               app_signature,
               collected_by_document,
               collected_by_first_name,
               collected_by_last_name,
               collected_by_father_name,
-              notes
-            )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+              operator,
+              notes,
+              sourcefile
+          )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(family_unique_code, cycle_code) DO UPDATE SET
+              distribution_id = excluded.distribution_id,
               distribution_time = excluded.distribution_time,
               app_signature = excluded.app_signature,
               collected_by_document = excluded.collected_by_document,
               collected_by_first_name = excluded.collected_by_first_name,
               collected_by_last_name = excluded.collected_by_last_name,
               collected_by_father_name = excluded.collected_by_father_name,
+              operator = excluded.operator,
               notes = excluded.notes,
+              sourcefile = excluded.sourcefile,
               updated_at = CURRENT_TIMESTAMP
             `,
             historyFamilyUniqueCode,
             cycleCode,
+            getDistributionHistoryId(historyEntry),
             asNullableText(historyEntry.timestamp),
             asNullableText(historyEntry.signature),
             getDistributionHistoryCollectedByDocument(historyEntry),
             asNullableText(findHistoryCollectorMember(family, historyEntry)?.firstName),
             asNullableText(findHistoryCollectorMember(family, historyEntry)?.lastName),
             asNullableText(findHistoryCollectorMember(family, historyEntry)?.fatherName),
-            asNullableText(historyEntry.notes)
+            getDistributionHistoryOperator(historyEntry),
+            asNullableText(historyEntry.notes),
+            getDistributionHistorySourcefile(historyEntry)
           );
         }
 
@@ -982,6 +1188,9 @@ export function createEligibleDataService(db: Database): EligibleDataService {
       SELECT
         family_unique_code as familyUniqueCode,
         principle_family_booklet as booklet,
+        principle_mobile as phone,
+        created_date as createdDate,
+        bpw_count as bpwCount,
         children_6_23_months as children623,
         updated_at as updatedAt
       FROM families
@@ -1126,9 +1335,9 @@ export function createEligibleDataService(db: Database): EligibleDataService {
         principleRow?.firstName ?? fallbackMember?.firstName ?? null,
         principleRow?.lastName ?? fallbackMember?.lastName ?? null
       ),
-      phone: 'N/A',
-      registrationDate: 'N/A',
-      pbwgs: 'N/A',
+      phone: asText(householdRow.phone).trim() || 'N/A',
+      registrationDate: formatDate(householdRow.createdDate, 'N/A'),
+      pbwgs: String(asNumber(householdRow.bpwCount, 0)),
       children623: asNumber(householdRow.children623)
     };
 
@@ -1327,6 +1536,223 @@ export function createEligibleDataService(db: Database): EligibleDataService {
     };
   }
 
+  async function getDistributionReport(): Promise<DistributionReportItem[]> {
+    const profile = await getUserProfileContext();
+
+    const syncedRows = await db.all<DistributionReportDbRow[]>(
+      `
+      SELECT
+        'synced' as sourceType,
+        COALESCE(sdh.distribution_id, sdh.rowid) as transactionId,
+        NULL as localDistributionId,
+        sdh.family_unique_code as familyUniqueCode,
+        m.member_id as memberId,
+        CAST(sdh.family_unique_code AS TEXT) as hhid,
+        (SELECT COUNT(*) FROM members m2 WHERE m2.family_unique_code = sdh.family_unique_code) as hhMembers,
+        f.created_date as hhRegistrationDate,
+        m.date_of_birth as dateOfBirth,
+        COALESCE(sdh.distribution_time, sdh.updated_at) as timestamp,
+        f.address as hhSubdistrict,
+        sdh.cycle_code as cycleCode,
+        c.cycle_name as cycleName,
+        COALESCE(
+          (
+            SELECT GROUP_CONCAT(en_name, ', ')
+            FROM (
+              SELECT fb.en_name
+              FROM cycle_food_baskets fb
+              WHERE fb.cycle_code = sdh.cycle_code
+              ORDER BY fb.basket_id ASC
+            )
+          ),
+          ''
+        ) as foodBasket,
+        COALESCE(dl.quantity, '1') as quantity,
+        COALESCE(sdh.collected_by_first_name, m.first_name) as collectedByFirstName,
+        COALESCE(sdh.collected_by_last_name, m.last_name) as collectedByLastName,
+        COALESCE(sdh.collected_by_father_name, m.father_name) as collectedByFatherName,
+        COALESCE(sdh.collected_by_document, m.document_number) as collectedByNationalId,
+        COALESCE(sdh.operator, '') as operator,
+        COALESCE(sdh.notes, '') as remarks,
+        COALESCE(sdh.sourcefile, '') as sourcefile
+      FROM synced_distribution_history sdh
+      LEFT JOIN families f ON f.family_unique_code = sdh.family_unique_code
+      LEFT JOIN cycles c ON c.cycle_code = sdh.cycle_code
+      LEFT JOIN distribution_list dl
+        ON dl.family_unique_code = sdh.family_unique_code
+       AND dl.cycle_code = sdh.cycle_code
+      LEFT JOIN members m
+        ON m.family_unique_code = sdh.family_unique_code
+       AND LOWER(TRIM(m.document_number)) = LOWER(TRIM(COALESCE(sdh.collected_by_document, '')))
+      ORDER BY sdh.family_unique_code ASC, sdh.cycle_code ASC, COALESCE(sdh.distribution_time, sdh.updated_at) ASC
+      `
+    );
+
+    const localRows = await db.all<DistributionReportDbRow[]>(
+      `
+      SELECT
+        'local' as sourceType,
+        NULL as transactionId,
+        dq.id as localDistributionId,
+        dq.family_unique_code as familyUniqueCode,
+        dq.member_id as memberId,
+        CAST(dq.family_unique_code AS TEXT) as hhid,
+        (SELECT COUNT(*) FROM members m2 WHERE m2.family_unique_code = dq.family_unique_code) as hhMembers,
+        f.created_date as hhRegistrationDate,
+        m.date_of_birth as dateOfBirth,
+        dq.created_at as timestamp,
+        f.address as hhSubdistrict,
+        dq.cycle_code as cycleCode,
+        c.cycle_name as cycleName,
+        COALESCE(
+          (
+            SELECT GROUP_CONCAT(en_name, ', ')
+            FROM (
+              SELECT fb.en_name
+              FROM cycle_food_baskets fb
+              WHERE fb.cycle_code = dq.cycle_code
+              ORDER BY fb.basket_id ASC
+            )
+          ),
+          ''
+        ) as foodBasket,
+        COALESCE(dl.quantity, CAST(dq.quantity AS TEXT), '1') as quantity,
+        m.first_name as collectedByFirstName,
+        m.last_name as collectedByLastName,
+        m.father_name as collectedByFatherName,
+        m.document_number as collectedByNationalId,
+        COALESCE(NULLIF(TRIM(dq.sub_operator), ''), '') as operator,
+        COALESCE(dq.notes, '') as remarks,
+        '' as sourcefile
+      FROM distribution_queue dq
+      LEFT JOIN families f ON f.family_unique_code = dq.family_unique_code
+      LEFT JOIN cycles c ON c.cycle_code = dq.cycle_code
+      LEFT JOIN distribution_list dl
+        ON dl.family_unique_code = dq.family_unique_code
+       AND dl.cycle_code = dq.cycle_code
+      LEFT JOIN members m ON m.member_id = dq.member_id
+      ORDER BY dq.created_at ASC, dq.id ASC
+      `
+    );
+
+    const rows = [...syncedRows, ...localRows];
+    return rows
+      .map((row) => {
+      const transactionId =
+        row.sourceType === 'synced'
+          ? row.transactionId === null
+            ? ''
+            : String(row.transactionId)
+          : buildReceiptId({
+              fdpCode: profile.fdp,
+              householdId: row.familyUniqueCode,
+              sequence: row.localDistributionId
+            });
+
+      const hhRegistrationDate = asText(row.hhRegistrationDate).trim();
+      const collectedByName = formatFullName(row.collectedByFirstName, row.collectedByLastName);
+      const collectedByNationalId = asText(row.collectedByNationalId).trim();
+
+      return {
+        transactionId,
+        hhid: row.hhid ?? String(row.familyUniqueCode),
+        hhMembers: asNumber(row.hhMembers),
+        hhRegistrationDate: hhRegistrationDate ? formatDate(hhRegistrationDate, hhRegistrationDate) : '',
+        ageGroup: getAgeGroupLabel(row.dateOfBirth),
+        timestamp: asText(row.timestamp).trim(),
+        hhSubdistrict: asText(row.hhSubdistrict).trim(),
+        cycleCode: String(asNumber(row.cycleCode)),
+        cycleName: asText(row.cycleName).trim(),
+        foodBasket: asText(row.foodBasket).trim(),
+        quantity: asText(row.quantity).trim() || '1',
+        partnerEnName: profile.corporatePartner,
+        fdpEnName: profile.fieldOffice,
+        fdpCode: profile.fdp,
+        collectedByName,
+        collectedByNationalId,
+        operator: asText(row.operator).trim(),
+        remarks: asText(row.remarks).trim(),
+        sourcefile: asText(row.sourcefile).trim()
+      };
+      })
+      .sort((left, right) => {
+        const hhidComparison = left.hhid.localeCompare(right.hhid, 'en', { numeric: true });
+        if (hhidComparison !== 0) {
+          return hhidComparison;
+        }
+
+        const timestampComparison = left.timestamp.localeCompare(right.timestamp);
+        if (timestampComparison !== 0) {
+          return timestampComparison;
+        }
+
+        return left.cycleCode.localeCompare(right.cycleCode, 'en', { numeric: true });
+      });
+  }
+
+  async function getUndistributedHouseholdReport(): Promise<UndistributedHouseholdReportItem[]> {
+    const rows = await db.all<UndistributedHouseholdReportRow[]>(
+      `
+      WITH family_cycles AS (
+        SELECT
+          family_unique_code as familyUniqueCode,
+          GROUP_CONCAT(cycle_code, ', ') as cycleCode
+        FROM (
+          SELECT DISTINCT
+            family_unique_code,
+            cycle_code
+          FROM distribution_list
+          ORDER BY family_unique_code ASC, cycle_code ASC
+        )
+        GROUP BY family_unique_code
+      ),
+      profile AS (
+        SELECT
+          corporate_partner as cpEnName,
+          field_office as fdpEnName
+        FROM "user"
+        ORDER BY user_id DESC
+        LIMIT 1
+      )
+      SELECT
+        f.family_unique_code as householdId,
+        f.principle_mobile as principalPhoneNo,
+        f.address as hhSubdistrict,
+        fc.cycleCode as cycleCode,
+        COALESCE(profile.cpEnName, '') as cpEnName,
+        COALESCE(profile.fdpEnName, '') as fdpEnName
+      FROM families f
+      LEFT JOIN family_cycles fc ON fc.familyUniqueCode = f.family_unique_code
+      LEFT JOIN profile ON 1 = 1
+      WHERE NOT EXISTS (
+        SELECT 1
+        FROM synced_distribution_history sdh
+        WHERE sdh.family_unique_code = f.family_unique_code
+      )
+      AND NOT EXISTS (
+        SELECT 1
+        FROM distribution_queue dq
+        WHERE dq.family_unique_code = f.family_unique_code
+      )
+      AND NOT EXISTS (
+        SELECT 1
+        FROM client_distribution_history cdh
+        WHERE cdh.family_unique_code = f.family_unique_code
+      )
+      ORDER BY f.family_unique_code ASC
+      `
+    );
+
+    return (rows ?? []).map((row) => ({
+      householdId: String(asNumber(row.householdId)),
+      principalPhoneNo: asText(row.principalPhoneNo).trim(),
+      hhSubdistrict: asText(row.hhSubdistrict).trim(),
+      cycleCode: asText(row.cycleCode).trim(),
+      cpEnName: asText(row.cpEnName).trim(),
+      fdpEnName: asText(row.fdpEnName).trim()
+    }));
+  }
+
   async function getDistributionQueue(): Promise<DistributionQueueItem[]> {
     const rows = await db.all<
       Array<{
@@ -1436,7 +1862,7 @@ export function createEligibleDataService(db: Database): EligibleDataService {
         UNION ALL
 
         SELECT
-          sdh.rowid as id,
+          COALESCE(sdh.distribution_id, sdh.rowid) as id,
           sdh.family_unique_code as familyUniqueCode,
           COALESCE(m.member_id, 0) as memberId,
           sdh.collected_by_document as collectedByDocument,
@@ -2028,6 +2454,8 @@ export function createEligibleDataService(db: Database): EligibleDataService {
 
   return {
     saveEligibleMembers,
+    getDistributionReport,
+    getUndistributedHouseholdReport,
     searchDistributionMember,
     getDistributionDetail,
     saveDistributionEvent,

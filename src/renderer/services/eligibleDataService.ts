@@ -9,13 +9,28 @@ import type {
   LocalDistributionEventInput,
   DistributionSearchResult,
   EligibleMembersApiResponse,
-  EligibleOverviewSummary
+  EligibleOverviewSummary,
+  DistributionReportExportResult,
+  UndistributedHouseholdReportExportResult,
+  UndistributedHouseholdReportItem
 } from '@shared/types/eligible';
 
 export async function saveEligibleData(
   payload: EligibleMembersApiResponse
 ): Promise<EligibleOverviewSummary> {
   return window.bertApp.eligibleData.save(payload);
+}
+
+export async function exportDistributionReport(): Promise<DistributionReportExportResult> {
+  return window.bertApp.eligibleData.exportDistributionReport();
+}
+
+export async function getUndistributedHouseholdReport(): Promise<UndistributedHouseholdReportItem[]> {
+  return window.bertApp.eligibleData.getUndistributedHouseholdReport();
+}
+
+export async function exportUndistributedHouseholdReport(): Promise<UndistributedHouseholdReportExportResult> {
+  return window.bertApp.eligibleData.exportUndistributedHouseholdReport();
 }
 
 export async function syncEligibleData(params: {

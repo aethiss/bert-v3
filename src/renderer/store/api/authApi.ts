@@ -22,6 +22,7 @@ function toPersistedUserProfile(
   return {
     id: typeof user.id === 'number' ? user.id : null,
     email: user.email,
+    corporatePartner: user.corporatepartner,
     fdp: user.fdp,
     fieldOffice: user.fieldOffice
   };

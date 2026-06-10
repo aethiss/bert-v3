@@ -1377,6 +1377,12 @@ main {
   padding-top: 4px;
 }
 
+.data-export-report-list {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
 .data-section-row {
   display: flex;
   align-items: center;

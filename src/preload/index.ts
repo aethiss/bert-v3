@@ -148,6 +148,15 @@ const bertAppApi: BertAppApi = {
     save(payload) {
       return ipcRenderer.invoke('eligibleData:save', payload);
     },
+    exportDistributionReport() {
+      return ipcRenderer.invoke('eligibleData:exportDistributionReport');
+    },
+    getUndistributedHouseholdReport() {
+      return ipcRenderer.invoke('eligibleData:getUndistributedHouseholdReport');
+    },
+    exportUndistributedHouseholdReport() {
+      return ipcRenderer.invoke('eligibleData:exportUndistributedHouseholdReport');
+    },
     sync(params) {
       return ipcRenderer.invoke('eligibleData:sync', params);
     },

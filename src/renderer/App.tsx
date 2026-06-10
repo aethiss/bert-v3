@@ -360,6 +360,11 @@ export function App() {
       userInfoRequest.unsubscribe();
     }
 
+    toast.info((profile.fieldOffice ?? '').trim() || getUiMessage('common.na', 'N/A'), {
+      description:
+        (profile.corporatePartner ?? '').trim() || getUiMessage('common.na', 'N/A')
+    });
+
     dispatch(
       setOnlineAuthSession({
         jwt,

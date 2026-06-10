@@ -13,6 +13,7 @@ const BASE_MIGRATIONS: string[] = [
     id INTEGER PRIMARY KEY CHECK (id = 1),
     user_id INTEGER,
     email TEXT NOT NULL,
+    corporate_partner TEXT,
     fdp TEXT,
     field_office TEXT,
     updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
@@ -50,6 +51,24 @@ const BASE_MIGRATIONS: string[] = [
   `
   CREATE INDEX IF NOT EXISTS idx_distribution_queue_cycle_code
     ON distribution_queue(cycle_code);
+  `,
+  `
+  CREATE TABLE IF NOT EXISTS cycle_food_baskets (
+    cycle_code INTEGER NOT NULL,
+    basket_id INTEGER NOT NULL,
+    unique_id TEXT NOT NULL,
+    code TEXT NOT NULL,
+    en_name TEXT NOT NULL DEFAULT '',
+    ar_name TEXT NOT NULL DEFAULT '',
+    description TEXT,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY(cycle_code, basket_id),
+    FOREIGN KEY(cycle_code) REFERENCES cycles(cycle_code) ON DELETE CASCADE
+  );
+  `,
+  `
+  CREATE INDEX IF NOT EXISTS idx_cycle_food_baskets_cycle_code
+    ON cycle_food_baskets(cycle_code);
   `,
   `
   CREATE TABLE IF NOT EXISTS client_distribution_history (
@@ -106,6 +125,9 @@ const ELIGIBLE_CACHE_SCHEMA: string[] = [
     status TEXT NOT NULL,
     eligible INTEGER NOT NULL DEFAULT 0,
     principle_family_booklet TEXT,
+    principle_mobile TEXT,
+    created_date TEXT,
+    bpw_count INTEGER NOT NULL DEFAULT 0,
     fdp_id TEXT NOT NULL,
     fdp_name TEXT NOT NULL,
     children_6_23_months INTEGER NOT NULL DEFAULT 0,
@@ -157,13 +179,16 @@ const ELIGIBLE_CACHE_SCHEMA: string[] = [
   CREATE TABLE IF NOT EXISTS synced_distribution_history (
     family_unique_code INTEGER NOT NULL,
     cycle_code INTEGER NOT NULL,
+    distribution_id INTEGER,
     distribution_time TEXT,
     app_signature TEXT,
     collected_by_document TEXT,
     collected_by_first_name TEXT,
     collected_by_last_name TEXT,
     collected_by_father_name TEXT,
+    operator TEXT,
     notes TEXT,
+    sourcefile TEXT,
     updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY(family_unique_code, cycle_code),
     FOREIGN KEY(family_unique_code) REFERENCES families(family_unique_code) ON DELETE CASCADE,
@@ -203,6 +228,25 @@ const ELIGIBLE_CACHE_SCHEMA: string[] = [
   CREATE INDEX IF NOT EXISTS idx_cycle_food_commodities_cycle_code
     ON cycle_food_commodities(cycle_code);
   `
+  ,
+  `
+  CREATE TABLE IF NOT EXISTS cycle_food_baskets (
+    cycle_code INTEGER NOT NULL,
+    basket_id INTEGER NOT NULL,
+    unique_id TEXT NOT NULL,
+    code TEXT NOT NULL,
+    en_name TEXT NOT NULL DEFAULT '',
+    ar_name TEXT NOT NULL DEFAULT '',
+    description TEXT,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY(cycle_code, basket_id),
+    FOREIGN KEY(cycle_code) REFERENCES cycles(cycle_code) ON DELETE CASCADE
+  );
+  `,
+  `
+  CREATE INDEX IF NOT EXISTS idx_cycle_food_baskets_cycle_code
+    ON cycle_food_baskets(cycle_code);
+  `
 ];
 
 function normalizeSql(sql: string | null | undefined): string {
@@ -220,6 +264,10 @@ async function ensureUserTableSchema(db: Database): Promise<void> {
   const hasUserId = userColumns.some((column) => column.name === 'user_id');
   if (!hasUserId) {
     await db.exec('ALTER TABLE "user" ADD COLUMN user_id INTEGER');
+  }
+  const hasCorporatePartner = userColumns.some((column) => column.name === 'corporate_partner');
+  if (!hasCorporatePartner) {
+    await db.exec('ALTER TABLE "user" ADD COLUMN corporate_partner TEXT');
   }
 }
 
@@ -242,6 +290,10 @@ async function ensureSyncedDistributionHistorySchema(db: Database): Promise<void
   if (columns.length === 0) {
     return;
   }
+  const hasDistributionId = columns.some((column) => column.name === 'distribution_id');
+  if (!hasDistributionId) {
+    await db.exec('ALTER TABLE synced_distribution_history ADD COLUMN distribution_id INTEGER');
+  }
   const hasCollectedByDocument = columns.some((column) => column.name === 'collected_by_document');
   if (!hasCollectedByDocument) {
     await db.exec('ALTER TABLE synced_distribution_history ADD COLUMN collected_by_document TEXT');
@@ -258,6 +310,14 @@ async function ensureSyncedDistributionHistorySchema(db: Database): Promise<void
   if (!hasCollectedByFatherName) {
     await db.exec('ALTER TABLE synced_distribution_history ADD COLUMN collected_by_father_name TEXT');
   }
+  const hasOperator = columns.some((column) => column.name === 'operator');
+  if (!hasOperator) {
+    await db.exec('ALTER TABLE synced_distribution_history ADD COLUMN operator TEXT');
+  }
+  const hasSourcefile = columns.some((column) => column.name === 'sourcefile');
+  if (!hasSourcefile) {
+    await db.exec('ALTER TABLE synced_distribution_history ADD COLUMN sourcefile TEXT');
+  }
 }
 
 async function ensureFamiliesSchema(db: Database): Promise<void> {
@@ -269,6 +329,18 @@ async function ensureFamiliesSchema(db: Database): Promise<void> {
   const hasPrincipleFamilyBooklet = columns.some((column) => column.name === 'principle_family_booklet');
   if (!hasPrincipleFamilyBooklet) {
     await db.exec('ALTER TABLE families ADD COLUMN principle_family_booklet TEXT');
+  }
+  const hasPrincipleMobile = columns.some((column) => column.name === 'principle_mobile');
+  if (!hasPrincipleMobile) {
+    await db.exec('ALTER TABLE families ADD COLUMN principle_mobile TEXT');
+  }
+  const hasCreatedDate = columns.some((column) => column.name === 'created_date');
+  if (!hasCreatedDate) {
+    await db.exec('ALTER TABLE families ADD COLUMN created_date TEXT');
+  }
+  const hasBpwCount = columns.some((column) => column.name === 'bpw_count');
+  if (!hasBpwCount) {
+    await db.exec('ALTER TABLE families ADD COLUMN bpw_count INTEGER NOT NULL DEFAULT 0');
   }
 }
 
@@ -339,6 +411,7 @@ async function shouldRebuildEligibleCacheSchema(db: Database): Promise<boolean> 
 async function rebuildEligibleCacheSchema(db: Database): Promise<void> {
   await db.exec('PRAGMA foreign_keys = OFF');
   try {
+    await db.exec('DROP TABLE IF EXISTS cycle_food_baskets');
     await db.exec('DROP TABLE IF EXISTS cycle_food_commodities');
     await db.exec('DROP TABLE IF EXISTS distribution_list');
     await db.exec('DROP TABLE IF EXISTS members');

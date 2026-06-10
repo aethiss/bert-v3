@@ -1,4 +1,6 @@
-import { ipcMain } from 'electron';
+import { app, dialog, ipcMain } from 'electron';
+import { writeFile } from 'node:fs/promises';
+import path from 'node:path';
 import type {
   ClientDistributionHistoryInput,
   ClientDistributionHistoryQuery,
@@ -7,16 +9,23 @@ import type {
   FamilyDistributionHistoryItem,
   EligibleMembersApiResponse,
   LocalDistributionEventInput,
+  DistributionReportExportResult,
   PushDistributionBatchResult,
-  PushDistributionResult
+  PushDistributionResult,
+  UndistributedHouseholdReportExportResult,
+  UndistributedHouseholdReportItem
 } from '../../shared/types/eligible';
 import { getEnvValue } from '../services/envService';
 import type { AppLogService } from '../services/logService';
 import type { EligibleDataService } from '../services/eligibleDataService';
+import { buildXlsxBuffer } from '../utils/xlsxWriter';
 
 const CHANNEL_SAVE_ELIGIBLE_DATA = 'eligibleData:save';
 const CHANNEL_HAS_ELIGIBLE_DATA = 'eligibleData:hasData';
 const CHANNEL_GET_OVERVIEW_SUMMARY = 'eligibleData:getOverviewSummary';
+const CHANNEL_EXPORT_DISTRIBUTION_REPORT = 'eligibleData:exportDistributionReport';
+const CHANNEL_GET_UNDISTRIBUTED_HOUSEHOLD_REPORT = 'eligibleData:getUndistributedHouseholdReport';
+const CHANNEL_EXPORT_UNDISTRIBUTED_HOUSEHOLD_REPORT = 'eligibleData:exportUndistributedHouseholdReport';
 const CHANNEL_CLEAR_ELIGIBLE_DATA = 'eligibleData:clear';
 const CHANNEL_SYNC_ELIGIBLE_DATA = 'eligibleData:sync';
 const CHANNEL_SEARCH_DISTRIBUTION_MEMBER = 'eligibleData:searchDistributionMember';
@@ -65,7 +74,7 @@ function resolveEligibleMembersUrl(fdpCode: string): string {
   const endpointPath =
     getEnvValue('RENDERER_VITE_ELIGIBLE_MEMBERS_PATH') ??
     getEnvValue('VITE_ELIGIBLE_MEMBERS_PATH') ??
-    '/api/v1/active-cycles-householdsv6/';
+    '/api/v1/active-cycles-householdsv7/';
 
   const normalizedPath = endpointPath.endsWith('/') ? endpointPath : `${endpointPath}/`;
   const url = new URL(`${normalizedPath}${fdpCode}`, apiBase);
@@ -87,6 +96,44 @@ function resolveBulkDistributionPushUrl(): string {
   return new URL(endpointPath, apiBase).toString();
 }
 
+async function exportXlsxReport(params: {
+  title: string;
+  sheetName: string;
+  headers: string[];
+  rows: string[][];
+  fileNamePrefix: string;
+}): Promise<{ filePath: string; rowCount: number }> {
+  const workbookBuffer = buildXlsxBuffer(params.sheetName, params.headers, params.rows);
+  const defaultPath = path.join(
+    app.getPath('documents'),
+    `${params.fileNamePrefix}-${new Date().toISOString().replace(/[:.]/g, '-')}.xlsx`
+  );
+
+  const result = await dialog.showSaveDialog({
+    title: params.title,
+    defaultPath,
+    filters: [{ name: 'Excel Workbook', extensions: ['xlsx'] }],
+    properties: ['createDirectory']
+  });
+
+  if (result.canceled || !result.filePath) {
+    throw new Error('Export cancelled.');
+  }
+
+  const parsedPath = path.parse(result.filePath);
+  const outputPath =
+    parsedPath.ext.toLowerCase() === '.xlsx'
+      ? result.filePath
+      : path.join(parsedPath.dir, `${parsedPath.name}.xlsx`);
+
+  await writeFile(outputPath, workbookBuffer);
+
+  return {
+    filePath: outputPath,
+    rowCount: params.rows.length
+  };
+}
+
 export function registerEligibleDataIpc(
   eligibleDataService: EligibleDataService,
   logService: AppLogService
@@ -94,6 +141,9 @@ export function registerEligibleDataIpc(
   ipcMain.removeHandler(CHANNEL_SAVE_ELIGIBLE_DATA);
   ipcMain.removeHandler(CHANNEL_HAS_ELIGIBLE_DATA);
   ipcMain.removeHandler(CHANNEL_GET_OVERVIEW_SUMMARY);
+  ipcMain.removeHandler(CHANNEL_EXPORT_DISTRIBUTION_REPORT);
+  ipcMain.removeHandler(CHANNEL_EXPORT_UNDISTRIBUTED_HOUSEHOLD_REPORT);
+  ipcMain.removeHandler(CHANNEL_GET_UNDISTRIBUTED_HOUSEHOLD_REPORT);
   ipcMain.removeHandler(CHANNEL_CLEAR_ELIGIBLE_DATA);
   ipcMain.removeHandler(CHANNEL_SYNC_ELIGIBLE_DATA);
   ipcMain.removeHandler(CHANNEL_SEARCH_DISTRIBUTION_MEMBER);
@@ -117,6 +167,95 @@ export function registerEligibleDataIpc(
   ipcMain.handle(CHANNEL_GET_OVERVIEW_SUMMARY, async () => {
     return eligibleDataService.getOverviewSummary();
   });
+
+  ipcMain.handle(
+    CHANNEL_EXPORT_DISTRIBUTION_REPORT,
+    async (): Promise<DistributionReportExportResult> => {
+      const reportRows = await eligibleDataService.getDistributionReport();
+      return exportXlsxReport({
+        title: 'Export Distribution Report',
+        sheetName: 'Distribution Report',
+        fileNamePrefix: 'Distribution_Report',
+        headers: [
+          'Transaction ID',
+          'HHID',
+          'HH  #Members',
+          'HH Registration Date',
+          'Age Group',
+          'timestamp',
+          'HH Subdistrict',
+          'CycleCode',
+          'CycleName',
+          'Food Basket',
+          'quantity',
+          'Partner En Name',
+          'FDP En Name',
+          'FDP Code',
+          'CollectedByName',
+          'CollectedByNationalId',
+          'Operator',
+          'Remarks',
+          'sourcefile'
+        ],
+        rows: reportRows.map((row) => [
+          row.transactionId,
+          row.hhid,
+          String(row.hhMembers),
+          row.hhRegistrationDate,
+          row.ageGroup,
+          row.timestamp,
+          row.hhSubdistrict,
+          row.cycleCode,
+          row.cycleName,
+          row.foodBasket,
+          row.quantity,
+          row.partnerEnName,
+          row.fdpEnName,
+          row.fdpCode,
+          row.collectedByName,
+          row.collectedByNationalId,
+          row.operator,
+          row.remarks,
+          row.sourcefile
+        ])
+      });
+    }
+  );
+
+  ipcMain.handle(
+    CHANNEL_GET_UNDISTRIBUTED_HOUSEHOLD_REPORT,
+    async (): Promise<UndistributedHouseholdReportItem[]> => {
+      return eligibleDataService.getUndistributedHouseholdReport();
+    }
+  );
+
+  ipcMain.handle(
+    CHANNEL_EXPORT_UNDISTRIBUTED_HOUSEHOLD_REPORT,
+    async (): Promise<UndistributedHouseholdReportExportResult> => {
+      const rows = await eligibleDataService.getUndistributedHouseholdReport();
+      return exportXlsxReport({
+        title: 'Export Undistributed HHs',
+        sheetName: 'Undistributed HHs',
+        fileNamePrefix: 'Undistributed_HHs',
+        headers: [
+          'HHID',
+          'Principal Phone No.',
+          'HH Subdistrict',
+          'Cycle Code',
+          'CP EnName',
+          'FDP EnName'
+        ],
+        rows: rows.map((row) => [
+          row.householdId,
+          row.principalPhoneNo,
+          row.hhSubdistrict,
+          row.cycleCode,
+          row.cpEnName,
+          row.fdpEnName
+        ])
+      });
+    }
+  );
 
   ipcMain.handle(CHANNEL_CLEAR_ELIGIBLE_DATA, async () => {
     await eligibleDataService.clearEligibleData();

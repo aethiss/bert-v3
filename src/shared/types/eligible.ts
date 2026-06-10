@@ -48,6 +48,9 @@ export interface EligibleFamilyApiModel {
   status: string;
   eligible: boolean;
   principle_family_booklet?: string | null;
+  principle_mobile?: string | null;
+  createdDate?: string | null;
+  bpw_count?: number | string | null;
   fdp_id: string;
   fdp_name: string;
   Number_of_Children_between_6_and_23_Months: number;
@@ -99,6 +102,47 @@ export interface EligibleOverviewSummary {
   pendingDistributionCount: number;
   lastSynchronizedAt: string | null;
   cycles: EligibleCycleSummary[];
+}
+
+export interface UndistributedHouseholdReportItem {
+  householdId: string;
+  principalPhoneNo: string;
+  hhSubdistrict: string;
+  cycleCode: string;
+  cpEnName: string;
+  fdpEnName: string;
+}
+
+export interface UndistributedHouseholdReportExportResult {
+  filePath: string;
+  rowCount: number;
+}
+
+export interface DistributionReportExportResult {
+  filePath: string;
+  rowCount: number;
+}
+
+export interface DistributionReportItem {
+  transactionId: string;
+  hhid: string;
+  hhMembers: number;
+  hhRegistrationDate: string;
+  ageGroup: string;
+  timestamp: string;
+  hhSubdistrict: string;
+  cycleCode: string;
+  cycleName: string;
+  foodBasket: string;
+  quantity: string;
+  partnerEnName: string;
+  fdpEnName: string;
+  fdpCode: string;
+  collectedByName: string;
+  collectedByNationalId: string;
+  operator: string;
+  remarks: string;
+  sourcefile: string;
 }
 
 export type DistributionSearchMatch = 'familyUniqueCode' | 'familyBooklet' | 'documentNumber';

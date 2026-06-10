@@ -28,6 +28,8 @@ import { buildReceiptPayload } from '@renderer/components/server/prints/receiptB
 
 interface ClientDistributionProps extends ClientRouteComponentProps {
   session: ClientSession | null;
+  isVersionMismatch: boolean;
+  versionMismatchMessage: string | null;
 }
 
 function asAgeLabel(age: number | null, fallback: string): string {
@@ -42,7 +44,13 @@ function hasUsableDocumentId(documentNumber: string | null): boolean {
   return Boolean(documentNumber?.trim());
 }
 
-export function Distribution({ route, onNavigate, session }: ClientDistributionProps) {
+export function Distribution({
+  route,
+  onNavigate,
+  session,
+  isVersionMismatch,
+  versionMismatchMessage
+}: ClientDistributionProps) {
   const intl = useIntl();
   const [query, setQuery] = useState('');
   const [isScanModeActive, setIsScanModeActive] = useState(false);
@@ -69,7 +77,8 @@ export function Distribution({ route, onNavigate, session }: ClientDistributionP
 
   const filteredMembers = detail?.members ?? [];
   const hasAssignableCycle = Boolean(detail?.activeCycles.some((cycle) => !cycle.isDistributed));
-  const isMemberSelectionDisabled = !hasAssignableCycle;
+  const isMemberSelectionDisabled = !hasAssignableCycle || isVersionMismatch;
+  const isDistributionLocked = isVersionMismatch;
 
   const selectedMember = (() => {
     return filteredMembers.find((member) => member.memberId === selectedMemberId) ?? null;
@@ -182,6 +191,20 @@ export function Distribution({ route, onNavigate, session }: ClientDistributionP
       return;
     }
 
+    if (isDistributionLocked) {
+      toast.error(intl.formatMessage({ id: 'client.versionMismatchTitle' }), {
+        description: versionMismatchMessage ?? intl.formatMessage({ id: 'common.na' })
+      });
+      return;
+    }
+
+    if (isDistributionLocked) {
+      toast.error(intl.formatMessage({ id: 'client.versionMismatchTitle' }), {
+        description: versionMismatchMessage ?? intl.formatMessage({ id: 'common.na' })
+      });
+      return;
+    }
+
     const normalized = query.trim();
     if (!normalized) {
       setResult(null);
@@ -216,6 +239,20 @@ export function Distribution({ route, onNavigate, session }: ClientDistributionP
 
   const handleOpenDetail = async (): Promise<void> => {
     if (!session || !result) {
+      return;
+    }
+
+    if (isDistributionLocked) {
+      toast.error(intl.formatMessage({ id: 'client.versionMismatchTitle' }), {
+        description: versionMismatchMessage ?? intl.formatMessage({ id: 'common.na' })
+      });
+      return;
+    }
+
+    if (isDistributionLocked) {
+      toast.error(intl.formatMessage({ id: 'client.versionMismatchTitle' }), {
+        description: versionMismatchMessage ?? intl.formatMessage({ id: 'common.na' })
+      });
       return;
     }
 
@@ -269,6 +306,20 @@ export function Distribution({ route, onNavigate, session }: ClientDistributionP
     if (!session) {
       toast.error(intl.formatMessage({ id: 'distribution.disconnectedTitle' }), {
         description: intl.formatMessage({ id: 'distribution.disconnectedConfirmDescription' })
+      });
+      return;
+    }
+
+    if (isDistributionLocked) {
+      toast.error(intl.formatMessage({ id: 'client.versionMismatchTitle' }), {
+        description: versionMismatchMessage ?? intl.formatMessage({ id: 'common.na' })
+      });
+      return;
+    }
+
+    if (isDistributionLocked) {
+      toast.error(intl.formatMessage({ id: 'client.versionMismatchTitle' }), {
+        description: versionMismatchMessage ?? intl.formatMessage({ id: 'common.na' })
       });
       return;
     }
@@ -422,6 +473,13 @@ export function Distribution({ route, onNavigate, session }: ClientDistributionP
       return;
     }
 
+    if (isDistributionLocked) {
+      toast.error(intl.formatMessage({ id: 'client.versionMismatchTitle' }), {
+        description: versionMismatchMessage ?? intl.formatMessage({ id: 'common.na' })
+      });
+      return;
+    }
+
     setIsReprintingCycleCode(cycleCode);
     try {
       const rows = await getClientDistributionHistory({
@@ -478,6 +536,20 @@ export function Distribution({ route, onNavigate, session }: ClientDistributionP
       return;
     }
 
+    if (isDistributionLocked) {
+      toast.error(intl.formatMessage({ id: 'client.versionMismatchTitle' }), {
+        description: versionMismatchMessage ?? intl.formatMessage({ id: 'common.na' })
+      });
+      return;
+    }
+
+    if (isDistributionLocked) {
+      toast.error(intl.formatMessage({ id: 'client.versionMismatchTitle' }), {
+        description: versionMismatchMessage ?? intl.formatMessage({ id: 'common.na' })
+      });
+      return;
+    }
+
     setIsLoadingHistory(true);
     try {
       const rows = await getClientDistributionHistory({
@@ -498,7 +570,13 @@ export function Distribution({ route, onNavigate, session }: ClientDistributionP
   return (
     <section className="server-content-block">
       <h1 className="server-page-title">{intl.formatMessage({ id: 'distribution.title' })}</h1>
-      {blockingMessage ? <div className="distribution-blocking-alert">{blockingMessage}</div> : null}
+      {isDistributionLocked ? (
+        <div className="distribution-blocking-alert">
+          {versionMismatchMessage ?? intl.formatMessage({ id: 'common.na' })}
+        </div>
+      ) : blockingMessage ? (
+        <div className="distribution-blocking-alert">{blockingMessage}</div>
+      ) : null}
 
       {route.distributionMode !== 'detail' ? (
         <>
@@ -510,6 +588,7 @@ export function Distribution({ route, onNavigate, session }: ClientDistributionP
               autoComplete="off"
               inputMode="numeric"
               pattern="[0-9]*"
+              disabled={isDistributionLocked}
               value={query}
               onChange={(event) => {
                 const digitsOnly = event.target.value.replace(/\D/g, '');
@@ -525,7 +604,7 @@ export function Distribution({ route, onNavigate, session }: ClientDistributionP
             <Button
               className="server-btn distribution-search-btn"
               onClick={() => void handleSearch()}
-              disabled={isSearching || !session}
+              disabled={isSearching || !session || isDistributionLocked}
             >
               <Search className="distribution-btn-icon" />
               {isSearching
@@ -554,7 +633,7 @@ export function Distribution({ route, onNavigate, session }: ClientDistributionP
                   description: intl.formatMessage({ id: 'distribution.scanListeningDescription' })
                 });
               }}
-              disabled={isSearching}
+              disabled={isSearching || isDistributionLocked}
             >
               <ScanLine className="distribution-btn-icon" />
               {isScanModeActive
@@ -586,7 +665,7 @@ export function Distribution({ route, onNavigate, session }: ClientDistributionP
                         type="button"
                         className="distribution-action-btn"
                         onClick={() => void handleOpenDetail()}
-                        disabled={isLoadingDetail}
+                        disabled={isLoadingDetail || isDistributionLocked}
                       >
                         {isLoadingDetail
                           ? intl.formatMessage({ id: 'common.loading' })
@@ -646,7 +725,7 @@ export function Distribution({ route, onNavigate, session }: ClientDistributionP
               <Button
                 className="server-btn distribution-history-btn"
                 onClick={() => void handleOpenHistory()}
-                disabled={isLoadingHistory}
+                disabled={isLoadingHistory || isDistributionLocked}
               >
                 {isLoadingHistory
                   ? intl.formatMessage({ id: 'common.loading' })
@@ -693,7 +772,7 @@ export function Distribution({ route, onNavigate, session }: ClientDistributionP
                           <input
                             type="checkbox"
                             checked={selectedCycleCodes.includes(cycle.cycleCode)}
-                            disabled={cycle.isDistributed}
+                            disabled={cycle.isDistributed || isDistributionLocked}
                             onChange={() => {
                               if (cycle.isDistributed) {
                                 return;
@@ -729,7 +808,7 @@ export function Distribution({ route, onNavigate, session }: ClientDistributionP
                               onClick={() => {
                                 void handleReprintCycle(cycle.cycleCode);
                               }}
-                              disabled={isReprintingCycleCode === cycle.cycleCode}
+                              disabled={isReprintingCycleCode === cycle.cycleCode || isDistributionLocked}
                             >
                               <Printer size={14} className="distribution-btn-icon" />
                               {isReprintingCycleCode === cycle.cycleCode
@@ -808,6 +887,7 @@ export function Distribution({ route, onNavigate, session }: ClientDistributionP
                         checked={selectedMemberId === member.memberId}
                         disabled={
                           isMemberSelectionDisabled ||
+                          isDistributionLocked ||
                           !isMemberEligibleForDistribution(member.age) ||
                           !hasUsableDocumentId(member.documentNumber)
                         }
@@ -862,7 +942,8 @@ export function Distribution({ route, onNavigate, session }: ClientDistributionP
                 disabled={
                   selectedCycleCodes.length === 0 ||
                   selectedMemberId === null ||
-                  !hasUsableDocumentId(selectedMember?.documentNumber ?? null)
+                  !hasUsableDocumentId(selectedMember?.documentNumber ?? null) ||
+                  isDistributionLocked
                 }
               >
                 {intl.formatMessage({ id: 'actions.confirm' })}
@@ -928,7 +1009,7 @@ export function Distribution({ route, onNavigate, session }: ClientDistributionP
                             onClick={() => {
                               void handleReprintCycle(item.cycleCode);
                             }}
-                            disabled={isReprintingCycleCode === item.cycleCode}
+                            disabled={isReprintingCycleCode === item.cycleCode || isDistributionLocked}
                           >
                             <Printer size={14} className="distribution-btn-icon" />
                             {isReprintingCycleCode === item.cycleCode

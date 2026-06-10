@@ -34,6 +34,18 @@ export function ClientPage({ route, appVersion, onNavigate }: ClientPageProps) {
   const [settings, setSettings] = useState<ClientConnectionSettings>(DEFAULT_CONNECTION_SETTINGS);
   const [session, setSession] = useState<ClientSession | null>(null);
   const [isSubmittingConnection, setIsSubmittingConnection] = useState(false);
+  const isVersionMismatch = Boolean(
+    session?.serverVersion.trim() && session.serverVersion.trim() !== appVersion.trim()
+  );
+  const versionMismatchMessage = isVersionMismatch
+    ? intl.formatMessage(
+        { id: 'client.versionMismatchDescription' },
+        {
+          clientVersion: appVersion,
+          serverVersion: session?.serverVersion ?? ''
+        }
+      )
+    : null;
 
   useEffect(() => {
     let mounted = true;
@@ -139,7 +151,15 @@ export function ClientPage({ route, appVersion, onNavigate }: ClientPageProps) {
 
   const content = useMemo(() => {
     if (route.section === 'distribution') {
-      return <Distribution route={route} onNavigate={onNavigate} session={session} />;
+      return (
+        <Distribution
+          route={route}
+          onNavigate={onNavigate}
+          session={session}
+          isVersionMismatch={isVersionMismatch}
+          versionMismatchMessage={versionMismatchMessage}
+        />
+      );
     }
 
     if (route.section === 'configuration') {
@@ -184,9 +204,11 @@ export function ClientPage({ route, appVersion, onNavigate }: ClientPageProps) {
     handleDisconnect,
     isSubmittingConnection,
     onNavigate,
+    isVersionMismatch,
     route,
     session,
     settings,
+    versionMismatchMessage,
     setSettings
   ]);
 

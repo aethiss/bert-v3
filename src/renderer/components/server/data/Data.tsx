@@ -3,7 +3,8 @@ import { useIntl } from 'react-intl';
 import { toast } from 'sonner';
 import { Button } from '@ui/components/ui/button';
 import {
-  getDistributionQueue,
+  exportDistributionReport,
+  exportUndistributedHouseholdReport,
   pushDistributionQueue
 } from '@renderer/services/eligibleDataService';
 import { isAuthExpiredError } from '@renderer/lib/authExpiry';
@@ -18,86 +19,6 @@ type Props = {
   onAuthExpired: () => Promise<void> | void;
 };
 
-function toWorksheetCell(value: unknown): string {
-  if (value === null || value === undefined) {
-    return '';
-  }
-  return String(value)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&apos;');
-}
-
-function createDistributionExcelXml(rows: Awaited<ReturnType<typeof getDistributionQueue>>): string {
-  const header = [
-    'id',
-    'familyUniqueCode',
-    'memberId',
-    'cycleCode',
-    'mainOperator',
-    'mainOperatorFDP',
-    'subOperator',
-    'quantity',
-    'appSignature',
-    'notes',
-    'status',
-    'createdAt'
-  ];
-
-  const allRows = [
-    header,
-    ...rows.map((row) => [
-      row.id,
-      row.familyUniqueCode,
-      row.memberId,
-      row.cycleCode,
-      row.mainOperator,
-      row.mainOperatorFDP,
-      row.subOperator,
-      row.quantity,
-      row.appSignature,
-      row.notes,
-      row.status,
-      row.createdAt
-    ])
-  ];
-
-  const tableRows = allRows
-    .map(
-      (row) =>
-        `<Row>${row
-          .map((value) => `<Cell><Data ss:Type="String">${toWorksheetCell(value)}</Data></Cell>`)
-          .join('')}</Row>`
-    )
-    .join('');
-
-  return `<?xml version="1.0"?>
-<?mso-application progid="Excel.Sheet"?>
-<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"
- xmlns:o="urn:schemas-microsoft-com:office:office"
- xmlns:x="urn:schemas-microsoft-com:office:excel"
- xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"
- xmlns:html="http://www.w3.org/TR/REC-html40">
-  <Worksheet ss:Name="Distributions">
-    <Table>${tableRows}</Table>
-  </Worksheet>
-</Workbook>`;
-}
-
-function downloadExcel(filename: string, content: string): void {
-  const blob = new Blob([content], {
-    type: 'application/vnd.ms-excel;charset=utf-8;'
-  });
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement('a');
-  anchor.href = url;
-  anchor.download = filename;
-  anchor.click();
-  URL.revokeObjectURL(url);
-}
-
 export function Data({
   pendingDistributionCount,
   isSynchronizing,
@@ -108,6 +29,7 @@ export function Data({
   const [isPushConfirmOpen, setIsPushConfirmOpen] = useState(false);
   const [isPushing, setIsPushing] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
+  const [isReportExporting, setIsReportExporting] = useState(false);
   const jwt = useAppSelector(selectJwt);
   const isOnline = useAppSelector(selectIsOnline);
 
@@ -164,27 +86,38 @@ export function Data({
   const handleExport = async (): Promise<void> => {
     setIsExporting(true);
     try {
-      const rows = await getDistributionQueue();
-      if (rows.length === 0) {
-        toast.error(intl.formatMessage({ id: 'data.exportFailedTitle' }), {
-          description: intl.formatMessage({ id: 'data.exportFailedDescription' })
-        });
-        return;
-      }
-
-      const workbookXml = createDistributionExcelXml(rows);
-      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-      downloadExcel(`distribution-report-${timestamp}.xls`, workbookXml);
+      const result = await exportDistributionReport();
       toast.success(intl.formatMessage({ id: 'data.exportCompletedTitle' }), {
         description: intl.formatMessage(
           { id: 'data.exportCompletedDescription' },
-          { count: rows.length }
+          { count: result.rowCount }
         )
       });
     } catch (error) {
-      showErrorToast(error);
+      if (!(error instanceof Error) || error.message !== 'Export cancelled.') {
+        showErrorToast(error);
+      }
     } finally {
       setIsExporting(false);
+    }
+  };
+
+  const handleExportUndistributedHouseholds = async (): Promise<void> => {
+    setIsReportExporting(true);
+    try {
+      const result = await exportUndistributedHouseholdReport();
+      toast.success(intl.formatMessage({ id: 'data.undistributedReportCompletedTitle' }), {
+        description: intl.formatMessage(
+          { id: 'data.undistributedReportCompletedDescription' },
+          { count: result.rowCount }
+        )
+      });
+    } catch (error) {
+      if (!(error instanceof Error) || error.message !== 'Export cancelled.') {
+        showErrorToast(error);
+      }
+    } finally {
+      setIsReportExporting(false);
     }
   };
 
@@ -217,17 +150,33 @@ export function Data({
 
       <section className="data-section data-section-export">
         <h2 className="data-export-title">{intl.formatMessage({ id: 'data.exportReportsTitle' })}</h2>
-        <div className="data-section-row">
-          <p className="data-section-title">{intl.formatMessage({ id: 'data.exportSectionTitle' })}</p>
-          <Button
-            className="server-btn data-action-btn"
-            onClick={() => void handleExport()}
-            disabled={isExporting}
-          >
-            {isExporting
-              ? intl.formatMessage({ id: 'data.exporting' })
-              : intl.formatMessage({ id: 'data.export' })}
-          </Button>
+        <div className="data-export-report-list">
+          <div className="data-section-row">
+            <p className="data-section-title">{intl.formatMessage({ id: 'data.exportSectionTitle' })}</p>
+            <Button
+              className="server-btn data-action-btn"
+              onClick={() => void handleExport()}
+              disabled={isExporting}
+            >
+              {isExporting
+                ? intl.formatMessage({ id: 'data.exporting' })
+                : intl.formatMessage({ id: 'data.export' })}
+            </Button>
+          </div>
+          <div className="data-section-row">
+            <p className="data-section-title">
+              {intl.formatMessage({ id: 'data.undistributedReportSectionTitle' })}
+            </p>
+            <Button
+              className="server-btn data-action-btn"
+              onClick={() => void handleExportUndistributedHouseholds()}
+              disabled={isReportExporting}
+            >
+              {isReportExporting
+                ? intl.formatMessage({ id: 'data.undistributedReportExporting' })
+                : intl.formatMessage({ id: 'data.undistributedReportExport' })}
+            </Button>
+          </div>
         </div>
       </section>
 

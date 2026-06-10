@@ -10,7 +10,10 @@ import type {
   LocalDistributionEventInput,
   DistributionSearchResult,
   EligibleMembersApiResponse,
-  EligibleOverviewSummary
+  EligibleOverviewSummary,
+  DistributionReportExportResult,
+  UndistributedHouseholdReportExportResult,
+  UndistributedHouseholdReportItem
 } from './eligible';
 import type { CiamLoginResult, ExchangeCodeResult } from './ipc/auth';
 import type { InstallerModeState } from './ipc/installer';
@@ -78,6 +81,9 @@ export interface BertAppApi {
   };
   eligibleData: {
     save(payload: EligibleMembersApiResponse): Promise<EligibleOverviewSummary>;
+    exportDistributionReport(): Promise<DistributionReportExportResult>;
+    getUndistributedHouseholdReport(): Promise<UndistributedHouseholdReportItem[]>;
+    exportUndistributedHouseholdReport(): Promise<UndistributedHouseholdReportExportResult>;
     sync(params: { fdpCode: string; jwt: string }): Promise<EligibleOverviewSummary>;
     searchDistributionMember(query: string): Promise<DistributionSearchResult | null>;
     getDistributionDetail(params: {
