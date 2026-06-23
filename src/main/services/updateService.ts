@@ -31,9 +31,60 @@ function areVersionsEquivalent(firstVersion: string | null, secondVersion: strin
   return normalizeVersion(firstVersion) === normalizeVersion(secondVersion);
 }
 
-function extractVersionFromMessage(message: string): string | null {
-  const match = message.match(/v?\d+(?:\.\d+)+/i);
-  return match?.[0] ?? null;
+function parseVersionParts(version: string): number[] | null {
+  const normalized = normalizeVersion(version).slice(1);
+  const parts = normalized.split('.').map((part) => Number.parseInt(part, 10));
+
+  if (parts.length === 0 || parts.some((part) => !Number.isInteger(part) || part < 0)) {
+    return null;
+  }
+
+  return parts;
+}
+
+function compareVersions(firstVersion: string, secondVersion: string): number {
+  const firstParts = parseVersionParts(firstVersion);
+  const secondParts = parseVersionParts(secondVersion);
+
+  if (!firstParts || !secondParts) {
+    return 0;
+  }
+
+  const maxLength = Math.max(firstParts.length, secondParts.length);
+  for (let index = 0; index < maxLength; index += 1) {
+    const firstPart = firstParts[index] ?? 0;
+    const secondPart = secondParts[index] ?? 0;
+    if (firstPart > secondPart) {
+      return 1;
+    }
+    if (firstPart < secondPart) {
+      return -1;
+    }
+  }
+
+  return 0;
+}
+
+function extractVersionsFromMessage(message: string): string[] {
+  const matches = message.match(/v?\d+(?:\.\d+)+/gi) ?? [];
+  return [...new Set(matches)];
+}
+
+function resolveAvailableVersion(message: string, currentVersion: string): string | null {
+  const versions = extractVersionsFromMessage(message);
+  let candidate: string | null = null;
+
+  for (const version of versions) {
+    if (compareVersions(version, currentVersion) <= 0) {
+      continue;
+    }
+
+    if (!candidate || compareVersions(version, candidate) > 0) {
+      candidate = version;
+    }
+  }
+
+  return candidate;
 }
 
 function markLoggedError(error: Error): Error {
@@ -279,16 +330,27 @@ export function createUpdateService(options: UpdateServiceOptions): UpdateServic
 
       const message = (payload.message ?? '').trim();
       releaseNotes = message || null;
-      const extractedVersion = extractVersionFromMessage(message);
-      const hasMatchingVersion = areVersionsEquivalent(extractedVersion, currentVersion);
+      const extractedVersion = resolveAvailableVersion(message, currentVersion);
+      const fallbackVersion = extractVersionsFromMessage(message)[0] ?? null;
+      const hasMatchingVersion = areVersionsEquivalent(extractedVersion ?? fallbackVersion, currentVersion);
+
+      await logService.logInfo('updater:checkForUpdates', 'Version check payload parsed', {
+        currentVersion,
+        message,
+        extractedVersion,
+        fallbackVersion,
+        hasMatchingVersion,
+        availableVersionCandidate: extractedVersion ?? fallbackVersion,
+        extractedVersions: extractVersionsFromMessage(message)
+      });
 
       if (message.toLowerCase() === 'you are using the last version' || hasMatchingVersion) {
         phase = 'idle';
-        availableVersion = extractedVersion;
+        availableVersion = fallbackVersion;
         downloadedVersion = null;
       } else {
         phase = 'available';
-        availableVersion = extractedVersion;
+        availableVersion = extractedVersion ?? fallbackVersion;
         downloadedVersion = null;
       }
 

@@ -19,12 +19,19 @@ function toPersistedUserProfile(
     throw new Error('Access denied: FDP user profile is missing a valid fdp code.');
   }
 
+  const fdpEnName = (user.fdp_enName ?? user.fieldOffice ?? '').trim() || null;
+  const fdpArName = (user.fdp_ar_name ?? '').trim() || null;
+  const mainCorporatePartner = (user.maincorporatepartner ?? '').trim() || null;
+
   return {
     id: typeof user.id === 'number' ? user.id : null,
     email: user.email,
     corporatePartner: user.corporatepartner,
+    mainCorporatePartner,
     fdp: user.fdp,
-    fieldOffice: user.fieldOffice
+    fdpEnName,
+    fdpArName,
+    fieldOffice: fdpEnName
   };
 }
 

@@ -438,6 +438,8 @@ export function Distribution({
           printedAtIso: new Date().toISOString(),
           cycles: savedCycles.map(({ cycle }) => ({
             cycleName: cycle.cycleName,
+            cycleEnName: cycle.cycleEnName,
+            cycleArName: cycle.cycleArName,
             foodCommodities: cycle.foodCommodities ?? []
           })),
           format: printSettings.format,
@@ -516,6 +518,8 @@ export function Distribution({
           cycles: [
             {
               cycleName: cycleMeta?.cycleName ?? historyItem.cycleName,
+              cycleEnName: cycleMeta?.cycleEnName ?? historyItem.cycleName,
+              cycleArName: cycleMeta?.cycleArName ?? historyItem.cycleName,
               foodCommodities: cycleMeta?.foodCommodities ?? []
             }
           ],

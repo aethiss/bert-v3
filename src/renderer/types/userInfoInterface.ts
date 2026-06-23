@@ -8,10 +8,12 @@ export interface IUserInfo extends IOffline {
   corporatepartner: string | null;
   email: string;
   fdp: string | null;
-  fieldOffice: string | null;
+  fdp_enName: string | null;
+  fdp_ar_name: string | null;
+  fieldOffice?: string | null;
   is_active: boolean;
   is_staff: boolean;
-  maincorporatepartner: string;
+  maincorporatepartner: string | null;
   permission_matrix: Record<string, unknown>;
   roles: Record<string, unknown>;
 }

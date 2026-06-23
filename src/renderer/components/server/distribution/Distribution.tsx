@@ -503,6 +503,8 @@ export function Distribution({ route, onNavigate }: ServerRouteComponentProps) {
           printedAtIso: new Date().toISOString(),
           cycles: savedCycles.map(({ cycle }) => ({
             cycleName: cycle.cycleName,
+            cycleEnName: cycle.cycleEnName,
+            cycleArName: cycle.cycleArName,
             foodCommodities: cycle.foodCommodities ?? []
           })),
           format: printSettings.format,
@@ -569,6 +571,8 @@ export function Distribution({ route, onNavigate }: ServerRouteComponentProps) {
           cycles: [
             {
               cycleName: cycleMeta?.cycleName ?? historyItem.cycleName,
+              cycleEnName: cycleMeta?.cycleEnName ?? historyItem.cycleName,
+              cycleArName: cycleMeta?.cycleArName ?? historyItem.cycleName,
               foodCommodities: cycleMeta?.foodCommodities ?? []
             }
           ],
@@ -614,12 +618,14 @@ export function Distribution({ route, onNavigate }: ServerRouteComponentProps) {
         fdpName: eligibleOverviewSummary.fdpName ?? currentUser?.fieldOffice ?? null,
         collectedByDocument: item.collectedByDocument ?? memberMeta?.documentNumber ?? null,
         printedAtIso: item.createdAt,
-        cycles: [
-          {
-            cycleName: cycleMeta?.cycleName ?? `Cycle ${item.cycleCode}`,
-            foodCommodities: cycleMeta?.foodCommodities ?? []
-          }
-        ],
+          cycles: [
+            {
+              cycleName: cycleMeta?.cycleName ?? `Cycle ${item.cycleCode}`,
+              cycleEnName: cycleMeta?.cycleEnName ?? `Cycle ${item.cycleCode}`,
+              cycleArName: cycleMeta?.cycleArName ?? `Cycle ${item.cycleCode}`,
+              foodCommodities: cycleMeta?.foodCommodities ?? []
+            }
+          ],
         format: 'A5',
         locale: intl.locale
       })

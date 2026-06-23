@@ -8,6 +8,7 @@ import { Button } from '@ui/components/ui/button';
 import { isRtkLikeError, toErrorMessage } from '@renderer/lib/errorMessage';
 import { showErrorToast } from '@renderer/lib/errorToast';
 import { checkForUpdatesAfterLogin } from '@renderer/services/updaterService';
+import { getLocalizedFdpName, getMainCorporatePartnerName } from '@renderer/lib/userProfile';
 import wfpLogoEmblemWhite from '@renderer/assets/branding/wfp-logo-emblem-white-all.svg';
 import { toast } from 'sonner';
 
@@ -55,13 +56,10 @@ export function LoginPage() {
       const profile = await triggerUserInfo(jwt).unwrap();
       console.info('[login] User profile loaded', { email: profile.email });
 
-      toast.info(
-        (profile.fieldOffice ?? '').trim() || intl.formatMessage({ id: 'common.na' }),
-        {
-          description:
-            (profile.corporatePartner ?? '').trim() || intl.formatMessage({ id: 'common.na' })
-        }
-      );
+      toast.info(getLocalizedFdpName(profile, intl.locale) || intl.formatMessage({ id: 'common.na' }), {
+        description:
+          getMainCorporatePartnerName(profile) || intl.formatMessage({ id: 'common.na' })
+      });
 
       dispatch(
         setOnlineAuthSession({

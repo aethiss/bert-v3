@@ -42,6 +42,7 @@ import {
 import { showErrorToast } from '@renderer/lib/errorToast';
 import { isRtkLikeError, toErrorMessage } from '@renderer/lib/errorMessage';
 import { isAuthExpiredError } from '@renderer/lib/authExpiry';
+import { getLocalizedFdpName, getMainCorporatePartnerName } from '@renderer/lib/userProfile';
 import { toast } from 'sonner';
 import {
   getAppVersion,
@@ -360,9 +361,8 @@ export function App() {
       userInfoRequest.unsubscribe();
     }
 
-    toast.info((profile.fieldOffice ?? '').trim() || getUiMessage('common.na', 'N/A'), {
-      description:
-        (profile.corporatePartner ?? '').trim() || getUiMessage('common.na', 'N/A')
+    toast.info(getLocalizedFdpName(profile, locale) || getUiMessage('common.na', 'N/A'), {
+      description: getMainCorporatePartnerName(profile) || getUiMessage('common.na', 'N/A')
     });
 
     dispatch(

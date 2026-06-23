@@ -87,6 +87,9 @@ export function Data({
     setIsExporting(true);
     try {
       const result = await exportDistributionReport();
+      if (result.cancelled) {
+        return;
+      }
       toast.success(intl.formatMessage({ id: 'data.exportCompletedTitle' }), {
         description: intl.formatMessage(
           { id: 'data.exportCompletedDescription' },
@@ -106,6 +109,9 @@ export function Data({
     setIsReportExporting(true);
     try {
       const result = await exportUndistributedHouseholdReport();
+      if (result.cancelled) {
+        return;
+      }
       toast.success(intl.formatMessage({ id: 'data.undistributedReportCompletedTitle' }), {
         description: intl.formatMessage(
           { id: 'data.undistributedReportCompletedDescription' },

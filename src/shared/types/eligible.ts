@@ -116,11 +116,13 @@ export interface UndistributedHouseholdReportItem {
 export interface UndistributedHouseholdReportExportResult {
   filePath: string;
   rowCount: number;
+  cancelled?: boolean;
 }
 
 export interface DistributionReportExportResult {
   filePath: string;
   rowCount: number;
+  cancelled?: boolean;
 }
 
 export interface DistributionReportItem {
@@ -177,6 +179,8 @@ export interface DistributionHouseholdInfo {
 export interface DistributionActiveCycle {
   cycleCode: number;
   cycleName: string;
+  cycleEnName?: string | null;
+  cycleArName?: string | null;
   assistanceType: string;
   quantity: string;
   startDate: string;

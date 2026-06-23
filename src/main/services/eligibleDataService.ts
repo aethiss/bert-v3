@@ -25,6 +25,7 @@ import type {
   UndistributedHouseholdReportItem,
   LocalDistributionEventInput
 } from '../../shared/types/eligible';
+import type { SupportedLocale } from '../../shared/types/language';
 import type { OperationsDashboardQuery } from '../../shared/types/operations';
 import { getDeviceMacAddress } from '../utils/deviceInfo';
 
@@ -73,6 +74,42 @@ function formatDate(value: string | null | undefined, fallback: string): string 
   return `${day}-${month}-${year}`;
 }
 
+function parseTimestampAsUtc(value: string): Date | null {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  const utcLike = /\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$/i.test(trimmed);
+  const normalized = utcLike
+    ? trimmed
+    : /^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}(:\d{2}(\.\d+)?)?$/.test(trimmed)
+      ? `${trimmed.replace(' ', 'T')}Z`
+      : trimmed;
+
+  const parsed = new Date(normalized);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function formatTimestampUtcPlus3(value: string | null | undefined): string {
+  if (!value) {
+    return '';
+  }
+
+  const parsed = parseTimestampAsUtc(value);
+  if (!parsed) {
+    return value.trim();
+  }
+
+  const shifted = new Date(parsed.getTime() + 3 * 60 * 60 * 1000);
+  const day = String(shifted.getUTCDate()).padStart(2, '0');
+  const month = String(shifted.getUTCMonth() + 1).padStart(2, '0');
+  const year = shifted.getUTCFullYear();
+  const hours = String(shifted.getUTCHours()).padStart(2, '0');
+  const minutes = String(shifted.getUTCMinutes()).padStart(2, '0');
+  return `${day}/${month}/${year} ${hours}:${minutes}`;
+}
+
 function computeAge(dateOfBirth: string | null): number | null {
   if (!dateOfBirth) {
     return null;
@@ -99,6 +136,13 @@ function toDisplayName(firstName: string | null, lastName: string | null): strin
   return joined || 'N/A';
 }
 
+async function getCurrentLocale(db: Database): Promise<SupportedLocale> {
+  const row = await db.get<{ value: string | null }>(
+    "SELECT value FROM config WHERE key = 'app.language' LIMIT 1"
+  );
+  return row?.value?.trim().toLowerCase() === 'ar' ? 'ar' : 'en';
+}
+
 function getEligibleCycleDisplayName(cycle: EligibleCycleApiModel): string {
   return (
     asText(cycle.cycleName).trim() ||
@@ -106,6 +150,14 @@ function getEligibleCycleDisplayName(cycle: EligibleCycleApiModel): string {
     asText(cycle.cycleArName).trim() ||
     `Cycle ${cycle.cycleCode}`
   );
+}
+
+function getEligibleCycleEnglishName(cycle: EligibleCycleApiModel): string {
+  return asText(cycle.cycleEnName).trim() || getEligibleCycleDisplayName(cycle);
+}
+
+function getEligibleCycleArabicName(cycle: EligibleCycleApiModel): string {
+  return asText(cycle.cycleArName).trim() || getEligibleCycleDisplayName(cycle);
 }
 
 function getEligibleCycleFoodCommodities(
@@ -303,6 +355,8 @@ interface DistributionMemberRow {
 interface DistributionActiveCycleRow {
   cycleCode: number;
   cycleName: string;
+  cycleEnName: string | null;
+  cycleArName: string | null;
   assistanceType: string;
   quantity: string;
   startDate: string;
@@ -622,13 +676,16 @@ export function createEligibleDataService(db: Database): EligibleDataService {
         await db.run(
           `
           INSERT INTO cycles (
-            cycle_code, cycle_id, cycle_name, assistance_package_name, start_date, end_date,
+            cycle_code, cycle_id, cycle_name, cycle_en_name, cycle_ar_name,
+            assistance_package_name, start_date, end_date,
             cycle_note, cooperating_partner, field_distribution_point, household_count
           )
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
           ON CONFLICT(cycle_code) DO UPDATE SET
             cycle_id = excluded.cycle_id,
             cycle_name = excluded.cycle_name,
+            cycle_en_name = excluded.cycle_en_name,
+            cycle_ar_name = excluded.cycle_ar_name,
             assistance_package_name = excluded.assistance_package_name,
             start_date = excluded.start_date,
             end_date = excluded.end_date,
@@ -641,6 +698,8 @@ export function createEligibleDataService(db: Database): EligibleDataService {
           cycleCode,
           asText(cycle.cycleId),
           getEligibleCycleDisplayName(cycle),
+          getEligibleCycleEnglishName(cycle),
+          getEligibleCycleArabicName(cycle),
           asText(cycle.assistancePackageName),
           asText(cycle.startDate),
           asText(cycle.endDate),
@@ -823,14 +882,17 @@ export function createEligibleDataService(db: Database): EligibleDataService {
             await db.run(
               `
               INSERT INTO cycles (
-                cycle_code, cycle_id, cycle_name, assistance_package_name, start_date, end_date,
+                cycle_code, cycle_id, cycle_name, cycle_en_name, cycle_ar_name,
+                assistance_package_name, start_date, end_date,
                 cycle_note, cooperating_partner, field_distribution_point, household_count
               )
-              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
               ON CONFLICT(cycle_code) DO NOTHING
               `,
               cycleCode,
               `history_${cycleCode}`,
+              `Cycle ${cycleCode}`,
+              `Cycle ${cycleCode}`,
               `Cycle ${cycleCode}`,
               '',
               asText(historyEntry.timestamp, '1970-01-01T00:00:00Z'),
@@ -1183,6 +1245,8 @@ export function createEligibleDataService(db: Database): EligibleDataService {
       return null;
     }
 
+    const locale = await getCurrentLocale(db);
+
     const householdRow = await db.get<DistributionHouseholdInfoRow>(
       `
       SELECT
@@ -1241,7 +1305,21 @@ export function createEligibleDataService(db: Database): EligibleDataService {
       SELECT
         c.cycle_code as cycleCode,
         c.cycle_name as cycleName,
-        c.assistance_package_name as assistanceType,
+        c.cycle_en_name as cycleEnName,
+        c.cycle_ar_name as cycleArName,
+        COALESCE(
+          (
+            SELECT GROUP_CONCAT(basketName, ', ')
+            FROM (
+              SELECT
+                CASE WHEN ? = 'ar' THEN fb.ar_name ELSE fb.en_name END as basketName
+              FROM cycle_food_baskets fb
+              WHERE fb.cycle_code = dl.cycle_code
+              ORDER BY fb.basket_id ASC
+            )
+          ),
+          c.assistance_package_name
+        ) as assistanceType,
         dl.quantity as quantity,
         c.start_date as startDate,
         c.end_date as endDate,
@@ -1269,6 +1347,7 @@ export function createEligibleDataService(db: Database): EligibleDataService {
       WHERE dl.family_unique_code = ?
       ORDER BY c.cycle_code DESC
       `,
+      locale,
       householdRow.familyUniqueCode
     );
 
@@ -1344,6 +1423,8 @@ export function createEligibleDataService(db: Database): EligibleDataService {
     const activeCycles: DistributionActiveCycle[] = activeCycleRows.map((row) => ({
       cycleCode: row.cycleCode,
       cycleName: row.cycleName,
+      cycleEnName: row.cycleEnName,
+      cycleArName: row.cycleArName,
       assistanceType: row.assistanceType,
       quantity: row.quantity,
       startDate: formatDate(row.startDate, '01-Jan-2026'),
@@ -1518,7 +1599,6 @@ export function createEligibleDataService(db: Database): EligibleDataService {
         WHERE dl.cycle_code = c.cycle_code
       )
       ORDER BY c.cycle_code DESC
-      LIMIT 2
       `
     );
 
@@ -1537,6 +1617,15 @@ export function createEligibleDataService(db: Database): EligibleDataService {
   }
 
   async function getDistributionReport(): Promise<DistributionReportItem[]> {
+    const meta = await db.get<{ fdpName: string | null }>(
+      `
+      SELECT fdp_name as fdpName
+      FROM eligible_meta
+      WHERE id = 1
+      LIMIT 1
+      `
+    );
+    const fdpEnName = asText(meta?.fdpName).trim();
     const profile = await getUserProfileContext();
 
     const syncedRows = await db.all<DistributionReportDbRow[]>(
@@ -1659,14 +1748,14 @@ export function createEligibleDataService(db: Database): EligibleDataService {
         hhMembers: asNumber(row.hhMembers),
         hhRegistrationDate: hhRegistrationDate ? formatDate(hhRegistrationDate, hhRegistrationDate) : '',
         ageGroup: getAgeGroupLabel(row.dateOfBirth),
-        timestamp: asText(row.timestamp).trim(),
+        timestamp: formatTimestampUtcPlus3(asText(row.timestamp).trim()),
         hhSubdistrict: asText(row.hhSubdistrict).trim(),
         cycleCode: String(asNumber(row.cycleCode)),
         cycleName: asText(row.cycleName).trim(),
         foodBasket: asText(row.foodBasket).trim(),
         quantity: asText(row.quantity).trim() || '1',
         partnerEnName: profile.corporatePartner,
-        fdpEnName: profile.fieldOffice,
+        fdpEnName,
         fdpCode: profile.fdp,
         collectedByName,
         collectedByNationalId,
@@ -1691,6 +1780,16 @@ export function createEligibleDataService(db: Database): EligibleDataService {
   }
 
   async function getUndistributedHouseholdReport(): Promise<UndistributedHouseholdReportItem[]> {
+    const meta = await db.get<{ fdpName: string | null }>(
+      `
+      SELECT fdp_name as fdpName
+      FROM eligible_meta
+      WHERE id = 1
+      LIMIT 1
+      `
+    );
+    const fdpEnName = asText(meta?.fdpName).trim();
+
     const rows = await db.all<UndistributedHouseholdReportRow[]>(
       `
       WITH family_cycles AS (
@@ -1709,7 +1808,7 @@ export function createEligibleDataService(db: Database): EligibleDataService {
       profile AS (
         SELECT
           corporate_partner as cpEnName,
-          field_office as fdpEnName
+          ? as fdpEnName
         FROM "user"
         ORDER BY user_id DESC
         LIMIT 1
@@ -1741,6 +1840,8 @@ export function createEligibleDataService(db: Database): EligibleDataService {
       )
       ORDER BY f.family_unique_code ASC
       `
+      ,
+      fdpEnName
     );
 
     return (rows ?? []).map((row) => ({

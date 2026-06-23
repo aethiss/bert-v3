@@ -12,8 +12,22 @@ function resolveCommodityName(commodity: EligibleFoodCommodityApiModel, locale: 
   return (commodity.en_name ?? commodity.ar_name ?? '').trim();
 }
 
+function resolveCycleName(cycle: ReceiptCycleSource, locale: string): string {
+  const normalizedLocale = locale.toLowerCase();
+  const englishName = (cycle.cycleEnName ?? cycle.cycleName ?? '').trim();
+  const arabicName = (cycle.cycleArName ?? '').trim();
+
+  if (normalizedLocale.startsWith('ar')) {
+    return arabicName || englishName;
+  }
+
+  return englishName || arabicName;
+}
+
 export interface ReceiptCycleSource {
   cycleName: string;
+  cycleEnName?: string | null;
+  cycleArName?: string | null;
   foodCommodities: EligibleFoodCommodityApiModel[] | null | undefined;
 }
 
@@ -57,7 +71,7 @@ export function buildReceiptPayload(params: BuildReceiptPayloadParams): ReceiptP
     collectedBy: hideMiddleNumbers(params.collectedByDocument ?? ''),
     printedAtIso: params.printedAtIso,
     cycles: (params.cycles ?? []).map<ReceiptCycleRow>((cycle) => ({
-      cycleName: cycle.cycleName,
+      cycleName: resolveCycleName(cycle, params.locale),
       commodities: mapCommodityRows(cycle.foodCommodities, params.locale)
     })),
     format: params.format

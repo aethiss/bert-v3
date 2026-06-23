@@ -108,6 +108,8 @@ const ELIGIBLE_CACHE_SCHEMA: string[] = [
     cycle_code INTEGER PRIMARY KEY,
     cycle_id TEXT NOT NULL,
     cycle_name TEXT NOT NULL,
+    cycle_en_name TEXT,
+    cycle_ar_name TEXT,
     assistance_package_name TEXT NOT NULL DEFAULT '',
     start_date TEXT NOT NULL,
     end_date TEXT NOT NULL,
@@ -433,6 +435,20 @@ async function ensureEligibleCacheSchema(db: Database): Promise<void> {
   await execStatements(db, ELIGIBLE_CACHE_SCHEMA);
 }
 
+async function ensureCyclesSchema(db: Database): Promise<void> {
+  const columns = await db.all<Array<{ name: string }>>('PRAGMA table_info(cycles)');
+  const hasCycleEnName = columns.some((column) => column.name === 'cycle_en_name');
+  const hasCycleArName = columns.some((column) => column.name === 'cycle_ar_name');
+
+  if (!hasCycleEnName) {
+    await db.exec('ALTER TABLE cycles ADD COLUMN cycle_en_name TEXT');
+  }
+
+  if (!hasCycleArName) {
+    await db.exec('ALTER TABLE cycles ADD COLUMN cycle_ar_name TEXT');
+  }
+}
+
 export async function runMigrations(db: Database): Promise<void> {
   await db.exec('BEGIN TRANSACTION');
 
@@ -441,6 +457,7 @@ export async function runMigrations(db: Database): Promise<void> {
     await ensureUserTableSchema(db);
     await ensureDistributionQueueSchema(db);
     await ensureEligibleCacheSchema(db);
+    await ensureCyclesSchema(db);
     await ensureFamiliesSchema(db);
     await ensureSyncedDistributionHistorySchema(db);
     await ensureClientDistributionHistorySchema(db);

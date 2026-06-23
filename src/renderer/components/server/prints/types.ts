@@ -9,6 +9,8 @@ export interface ReceiptCommodityRow {
 
 export interface ReceiptCycleRow {
   cycleName: string;
+  cycleEnName?: string | null;
+  cycleArName?: string | null;
   commodities: ReceiptCommodityRow[];
 }
 

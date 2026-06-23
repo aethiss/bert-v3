@@ -102,7 +102,7 @@ async function exportXlsxReport(params: {
   headers: string[];
   rows: string[][];
   fileNamePrefix: string;
-}): Promise<{ filePath: string; rowCount: number }> {
+}): Promise<{ filePath: string; rowCount: number; cancelled?: boolean }> {
   const workbookBuffer = buildXlsxBuffer(params.sheetName, params.headers, params.rows);
   const defaultPath = path.join(
     app.getPath('documents'),
@@ -117,7 +117,11 @@ async function exportXlsxReport(params: {
   });
 
   if (result.canceled || !result.filePath) {
-    throw new Error('Export cancelled.');
+    return {
+      filePath: '',
+      rowCount: params.rows.length,
+      cancelled: true
+    };
   }
 
   const parsedPath = path.parse(result.filePath);
